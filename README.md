@@ -1,5 +1,7 @@
 # Pi Web
 
+> **定制版**：这是 `custom` 分支，在原版基础上加了像素 HUD 风格、代码折叠和长代码流式优化，详见 [FORK.md](./FORK.md)。
+
 [中文文档](./docs/README.zh-CN.md) | [日本語](./docs/README.ja.md) | [Русский](./docs/README.ru.md)
 
 Local browser UI for the [pi coding agent](https://github.com/earendil-works/pi). Pi Web uses the same local configuration and session files as pi, so you can browse and resume conversations, run agent turns, configure models and resources, and inspect project files from a browser.
