@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from "crypto";
-import { existsSync, readFileSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "fs";
+import { basename, join, resolve } from "path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { forkSessionName, sessionDisplayTitle } from "./session-fork-name";
 import { scanSessionFileInfo } from "./session-list-scanner";
@@ -72,6 +73,36 @@ export function forkSessionBranch(
     randomBytes(2).toString("hex"),
     typeof manager.getHeader()?.parentSession === "string",
   )));
+}
+
+/**
+ * "Continue in another folder": the same copy of the current branch, moved to
+ * `targetCwd`. The copy is made beside the source (copySessionBranch(), with
+ * every check a fork has), then its header's cwd is set to the folder and the
+ * file goes to that folder's session directory, where pi and the sidebar look
+ * for that project's sessions; the header keeps `parentSession` = the source.
+ * The copy keeps the source's title as it is: it sits in another project's
+ * group, so no suffix is needed to tell them apart. The source is unchanged.
+ */
+export function forkSessionBranchToCwd(
+  sourcePath: string,
+  liveLeafId: string | null | undefined,
+  sourceTitle: string | null | undefined,
+  targetCwd: string,
+): { sessionId: string; path: string; name: string | undefined } {
+  const cwd = resolve(targetCwd);
+  const copy = copySessionBranch(sourcePath, liveLeafId, () => sourceTitle?.trim() || undefined);
+  const [headerLine, ...entries] = readFileSync(copy.path, "utf8").trimEnd().split("\n");
+  const header = JSON.parse(headerLine) as Record<string, unknown>;
+  header.cwd = cwd;
+  // The session directory pi derives from a cwd; create() writes nothing until a message.
+  const dir = SessionManager.create(cwd).getSessionDir();
+  mkdirSync(dir, { recursive: true });
+  const path = join(dir, basename(copy.path));
+  const samePlace = resolve(path) === resolve(copy.path);
+  writeFileSync(path, [JSON.stringify(header), ...entries].join("\n") + "\n", { encoding: "utf8", flag: samePlace ? "w" : "wx" });
+  if (!samePlace) unlinkSync(copy.path);
+  return { sessionId: copy.sessionId, path, name: copy.name };
 }
 
 /**

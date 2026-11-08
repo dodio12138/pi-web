@@ -1,3 +1,4 @@
+import { readWorkspaceDir, workspacePromptNote } from "./workspace-settings";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { createAgentSessionFromServices, createAgentSessionServices, getAgentDir, initTheme, SessionManager, SettingsManager, Theme, type ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { KeybindingsManager as TuiKeybindingsManager, TUI_KEYBINDINGS } from "@earendil-works/pi-tui";
@@ -3307,6 +3308,12 @@ export async function startRpcSession(
               ),
             ],
             extensionsOverride: (base) => preferUserBashExtension(preferPiWebSubagentExtension(base)),
+            // The user's workspace for new projects (Settings › General), read as
+            // the session starts: a session started before a change keeps the old one.
+            appendSystemPromptOverride: (base) => {
+              const workspace = readWorkspaceDir(agentDir);
+              return workspace ? [...base, workspacePromptNote(workspace)] : base;
+            },
           },
       ...(trustReloadOptions ? { resourceLoaderReloadOptions: trustReloadOptions } : {}),
     });

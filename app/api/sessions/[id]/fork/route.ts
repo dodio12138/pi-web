@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { getRpcSession } from "@/lib/rpc-manager";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
 import { sideChatNameFromText } from "@/lib/session-family";
-import { createSideSession, forkSessionBranch, readForkSourceTitle, SessionForkError } from "@/lib/session-fork";
+import { statSync } from "fs";
+import { allowFileRoot } from "@/lib/file-access";
+import { createSideSession, forkSessionBranch, forkSessionBranchToCwd, readForkSourceTitle, SessionForkError } from "@/lib/session-fork";
+import { normalizeWorkspacePath } from "@/lib/workspace-settings";
 import {
   cacheSessionPath,
   invalidateSessionListCache,
@@ -34,15 +37,27 @@ function refusal(status: number, code: string, error: string) {
 }
 
 // POST /api/sessions/[id]/fork - body {}, or { side: true, name? } for a side
-// chat (`/side`, ADR 0007); answers with the new session.
+// chat (`/side`, ADR 0007), or { cwd } to continue the conversation in another
+// folder (an existing directory; the copy's project is that folder); answers
+// with the new session.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   if (!isApiRequestAllowed(req)) return refusal(403, "request-denied", "Untrusted API request");
   if (!hasJsonContentType(req)) return refusal(415, "request-denied", "Content-Type must be application/json");
   const { id } = await params;
 
   try {
-    const body = await req.json().catch(() => null) as { side?: unknown; name?: unknown } | null;
+    const body = await req.json().catch(() => null) as { side?: unknown; name?: unknown; cwd?: unknown } | null;
     const side = body?.side === true;
+    let targetCwd: string | null = null;
+    if (body?.cwd !== undefined) {
+      targetCwd = typeof body.cwd === "string" ? normalizeWorkspacePath(body.cwd) : null;
+      if (side || !targetCwd) return refusal(400, "bad_cwd", "An absolute folder path is required");
+      try {
+        if (!statSync(targetCwd).isDirectory()) throw new Error("not a directory");
+      } catch {
+        return refusal(400, "bad_cwd", `Directory does not exist: ${targetCwd}`);
+      }
+    }
     const sideName = typeof body?.name === "string" ? sideChatNameFromText(body.name) ?? undefined : undefined;
     const opened = getRpcSession(id);
     const sourcePath = (opened?.isAlive() ? opened.sessionFile : "") || await resolveSessionPath(id);
@@ -67,7 +82,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       const diskLatest = readLatestSessionEntryId(wrapper.sessionFile);
       if (diskLatest && !wrapper.inner.sessionManager.getEntry(diskLatest)) liveLeafId = undefined;
     }
-    const fork = side ? createSideSession(sourcePath, liveLeafId, sideName) : forkSessionBranch(sourcePath, liveLeafId, sourceTitle);
+    const fork = side
+      ? createSideSession(sourcePath, liveLeafId, sideName)
+      : targetCwd
+        ? forkSessionBranchToCwd(sourcePath, liveLeafId, sourceTitle, targetCwd)
+        : forkSessionBranch(sourcePath, liveLeafId, sourceTitle);
+    // The new project's files are browsed through the file routes.
+    if (targetCwd) allowFileRoot(targetCwd);
     cacheSessionPath(fork.sessionId, fork.path);
     invalidateSessionListCache();
 

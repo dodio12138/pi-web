@@ -122,6 +122,17 @@ export function ForkIcon(props: SidebarIconProps) {
   );
 }
 
+/** A folder with an arrow into it: a session row's "Continue in another folder". */
+export function FolderMoveIcon(props: SidebarIconProps) {
+  return (
+    <SidebarIcon {...props}>
+      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+      <path d="M9 13h7" />
+      <path d="m13 10 3 3-3 3" />
+    </SidebarIcon>
+  );
+}
+
 /** An arrow leaving a box: a session row's "Open in new tab" (a browser tab, not a copy). */
 export function OpenInNewTabIcon(props: SidebarIconProps) {
   return (

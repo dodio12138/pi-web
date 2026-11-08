@@ -113,9 +113,11 @@ interface Props {
   initialPath?: string;
   busy?: boolean;
   error?: string | null;
+  /** Opened from Settings (z-index 1000): sits above it, as the trust dialog does. */
+  stacked?: boolean;
 }
 
-export function DirectoryPicker({ onCancel, onSelect, initialPath, busy = false, error }: Props) {
+export function DirectoryPicker({ onCancel, onSelect, initialPath, busy = false, error, stacked = false }: Props) {
   const { t } = useI18n();
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
   const [currentPath, setCurrentPath] = useState("");
@@ -218,7 +220,7 @@ export function DirectoryPicker({ onCancel, onSelect, initialPath, busy = false,
       onKeyDown={(event) => {
         if (event.key === "Escape" && !busy) onCancel();
       }}
-      style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.35)" }}
+      style={{ position: "fixed", inset: 0, zIndex: stacked ? 1100 : 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.35)" }}
     >
       <div className="directory-picker-panel" style={{ ...panelSurfaceStyle, position: "relative", width: 520, maxWidth: "calc(100vw - 16px)", height: "min(620px, calc(100dvh - 16px))", maxHeight: "calc(100dvh - 16px)", display: "flex", flexDirection: "column" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, padding: "12px 18px", borderBottom: "1px solid var(--border)" }}>

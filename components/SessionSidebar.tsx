@@ -95,6 +95,7 @@ import { SessionSearch } from "./SessionSearch";
 import { SessionTree, sessionRowTitle, type SessionTreeReveal } from "./SessionTree";
 import { SidebarMenu, type SidebarMenuAnchor, type SidebarMenuItem } from "./SidebarMenu";
 import { SidebarToast, type SidebarToastAction, type SidebarToastData } from "./SidebarToast";
+import { fetchWorkspaceDir } from "./WorkspaceSettings";
 import {
   ArchiveIcon,
   ChangesIcon,
@@ -106,6 +107,7 @@ import {
   FolderIcon,
   MessageIcon,
   MoreIcon,
+  FolderMoveIcon,
   ForkIcon,
   OpenInNewTabIcon,
   PencilIcon,
@@ -340,6 +342,7 @@ const SESSION_ACTION_LABEL_KEYS: Record<SessionMenuActionId, string> = {
   unpin: "sidebar.unpin",
   rename: "sidebar.rename",
   fork: "sidebar.fork",
+  "continue-in-folder": "sidebar.continueInFolder",
   "mark-read": "sidebar.markRead",
   "mark-unread": "sidebar.markUnread",
   archive: "sidebar.archive",
@@ -354,6 +357,7 @@ function sessionActionIcon(id: SessionMenuActionId): ReactNode {
     case "unpin": return <PinOffIcon />;
     case "rename": return <PencilIcon />;
     case "fork": return <ForkIcon />;
+    case "continue-in-folder": return <FolderMoveIcon />;
     case "mark-read": return <DotOutlineIcon />;
     case "mark-unread": return <DotIcon />;
     case "archive": return <ArchiveIcon />;
@@ -1980,10 +1984,24 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const openForkedRef = useRef(openForked);
   openForkedRef.current = openForked;
 
+  // "Continue in another folder…" (the row menu's M): pick a folder, starting
+  // in the workspace (Settings › General) or else the session's own folder,
+  // and the current branch goes on there as a new session of that folder's
+  // project (POST /api/sessions/[id]/fork { cwd }). The source stays as it is.
+  const [continueRow, setContinueRow] = useState<SessionRow | null>(null);
+  const [continueStart, setContinueStart] = useState<string | undefined>(undefined);
+  const [continueBusy, setContinueBusy] = useState(false);
+  const openContinueInFolder = useCallback(async (row: SessionRow) => {
+    if (row.family.root.transient) return;
+    const workspace = await fetchWorkspaceDir();
+    setContinueStart(workspace ?? row.family.root.cwd);
+    setContinueRow(row);
+  }, []);
+
   // One fork per session at a time: F again on a session whose fork is under
   // way does nothing; another session's Fork goes ahead.
   const forkingIdsRef = useRef(new Set<string>());
-  const forkFamily = useCallback(async (row: SessionRow) => {
+  const forkFamily = useCallback(async (row: SessionRow, targetCwd?: string) => {
     const source = row.family.root;
     if (source.transient || forkingIdsRef.current.has(source.id)) return;
     forkingIdsRef.current.add(source.id);
@@ -1992,7 +2010,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       const res = await fetch(`/api/sessions/${encodeURIComponent(source.id)}/fork`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: "{}",
+        body: targetCwd ? JSON.stringify({ cwd: targetCwd }) : "{}",
       });
       const data = await res.json().catch(() => ({})) as { session?: SessionInfo; code?: string; error?: string };
       if (!res.ok || !data.session) {
@@ -2003,6 +2021,12 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         return;
       }
       const forked = data.session;
+      if (targetCwd) {
+        // Continued in another folder: the copy keeps the title, in that folder's group.
+        openForkedRef.current(forked, row.key);
+        showToast(t("sidebar.continuedToast", { folder: forked.cwd.split(/[\\/]/).filter(Boolean).pop() ?? forked.cwd }));
+        return;
+      }
       // The copy's name ends in the suffix that tells it from its source: the
       // toast's ellipsis cuts the name before it, never the suffix. A copy
       // left unnamed (its source had no title) is cut as other toasts are.
@@ -2048,6 +2072,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       case "unpin": setFamilyPinned(family, false); break;
       case "rename": startRename(family); break;
       case "fork": void forkFamily(row); break;
+      case "continue-in-folder": void openContinueInFolder(row); break;
       case "mark-read": markFamilyRead(family, true); break;
       case "mark-unread": markFamilyRead(family, false); break;
       case "archive": archiveFamily(family); break;
@@ -2843,6 +2868,21 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       onFocus={(event) => { sidebarFocusRef.current = event.target; }}
       onBlur={(event) => { if (event.relatedTarget === null && !document.hasFocus()) return; if (!event.currentTarget.contains(event.relatedTarget)) sidebarFocusRef.current = null; }}
     >
+      {continueRow && (
+        <DirectoryPicker
+          initialPath={continueStart}
+          busy={continueBusy}
+          onCancel={() => { if (!continueBusy) setContinueRow(null); }}
+          onSelect={(path) => {
+            const row = continueRow;
+            setContinueBusy(true);
+            void forkFamily(row, path).finally(() => {
+              setContinueBusy(false);
+              setContinueRow(null);
+            });
+          }}
+        />
+      )}
       {customPathOpen && (
         <DirectoryPicker
           initialPath={customPathValue}
