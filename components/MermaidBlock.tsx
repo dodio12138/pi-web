@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { SyntaxHighlighterProps } from "react-syntax-highlighter";
 import renderSyntaxNode from "react-syntax-highlighter/dist/esm/create-element";
 import SyntaxHighlighter from "react-syntax-highlighter/dist/esm/prism-light";
@@ -10,6 +10,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useI18n } from "@/hooks/useI18n";
 import { usePrismLanguages } from "@/hooks/usePrismLanguages";
 import { copyText } from "@/lib/clipboard";
+import { autoFoldStarts, computeFoldRanges, hiddenLines } from "@/lib/code-folding";
 import { takeHighlightBudget, waitForHighlight } from "@/lib/highlight-queue";
 import { prismLanguagesLoaded } from "@/lib/prism-languages";
 
@@ -327,30 +328,126 @@ delete codeBlockDarkTheme['pre[class*="language-"]'].background;
 
 type CodeLinesProps = Parameters<NonNullable<SyntaxHighlighterProps["renderer"]>>[0];
 
+type CodeFold = {
+  ranges: ReadonlyMap<number, number>;
+  collapsed: ReadonlySet<number>;
+  hidden: readonly boolean[];
+  toggle: (line: number) => void;
+  labels: { fold: string; unfold: string; folded: (count: number) => string };
+};
+
+/**
+ * A block's fold state, read by each line. Lines take it from context so a fold
+ * re-renders only the lines, never the highlighter: Prism does not run again.
+ */
+const CodeFoldContext = createContext<CodeFold | null>(null);
+
+type SyntaxRow = CodeLinesProps["rows"][number];
+type SyntaxStylesheet = CodeLinesProps["stylesheet"];
+
+/**
+ * One line of a highlighted fence. Its React elements are made here, only while
+ * the line shows: a long fence opens folded, and building the elements of every
+ * token on its hidden lines was most of the work of showing it.
+ */
+function CodeLine({ index, row, stylesheet, useInlineStyles }: { index: number; row: SyntaxRow; stylesheet: SyntaxStylesheet; useInlineStyles: boolean }) {
+  const fold = useContext(CodeFoldContext);
+  const hidden = !!fold && fold.ranges.size > 0 && !!fold.hidden[index];
+  const parts = useMemo(() => (hidden ? null : renderCodeLineParts(row, stylesheet, useInlineStyles)), [hidden, row, stylesheet, useInlineStyles]);
+  if (!parts) return null;
+  const { number, text } = parts;
+  if (!fold || fold.ranges.size === 0) {
+    return <span className="markdown-code-line">{number}{text}</span>;
+  }
+  const end = fold.ranges.get(index);
+  const collapsed = end !== undefined && fold.collapsed.has(index);
+  return (
+    <span className="markdown-code-line" data-folded={collapsed || undefined}>
+      {end === undefined ? (
+        <span className="markdown-code-fold-spacer" aria-hidden="true" />
+      ) : (
+        <button
+          type="button"
+          className="markdown-code-fold"
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? fold.labels.unfold : fold.labels.fold}
+          title={collapsed ? fold.labels.unfold : fold.labels.fold}
+          onClick={() => fold.toggle(index)}
+        >
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d={collapsed ? "M9 6l6 6-6 6" : "M6 9l6 6 6-6"} />
+          </svg>
+        </button>
+      )}
+      {number}
+      {text}
+      {collapsed && end !== undefined && (
+        <button type="button" className="markdown-code-fold-placeholder" title={fold.labels.unfold} onClick={() => fold.toggle(index)}>
+          ⋯ {fold.labels.folded(end - index)}
+        </button>
+      )}
+    </span>
+  );
+}
+
 /**
  * A fence's lines, each a row of its number and its text (`.markdown-code-line`
  * in app/globals.css): long lines wrap, as in pi's TUI, and a wrapped line goes
  * on under its own text, never under the number. The text keeps the row's own
  * classes, which color the later lines of a token that spans several (a block
- * comment).
+ * comment). A row whose block folds gets a toggle before its number (CodeLine).
  */
-function renderCodeLines({ rows, stylesheet, useInlineStyles }: CodeLinesProps) {
-  return rows.map((row, index) => {
-    const children = row.children ?? [];
-    const number = children[0]?.properties?.className.includes("react-syntax-highlighter-line-number") ? children[0] : null;
-    const text = {
-      ...row,
-      properties: { ...row.properties, className: [...(row.properties?.className ?? []), "markdown-code-line-text"] },
-      children: number ? children.slice(1) : children,
-    };
-    return (
-      <span key={index} className="markdown-code-line">
-        {number && renderSyntaxNode({ node: number, stylesheet, useInlineStyles, key: "number" })}
-        {renderSyntaxNode({ node: text, stylesheet, useInlineStyles, key: "text" })}
-      </span>
-    );
-  });
+function renderCodeLineParts(row: SyntaxRow, stylesheet: SyntaxStylesheet, useInlineStyles: boolean) {
+  const children = row.children ?? [];
+  const number = children[0]?.properties?.className.includes("react-syntax-highlighter-line-number") ? children[0] : null;
+  const text = {
+    ...row,
+    properties: { ...row.properties, className: [...(row.properties?.className ?? []), "markdown-code-line-text"] },
+    children: number ? children.slice(1) : children,
+  };
+  return {
+    number: number && renderSyntaxNode({ node: number, stylesheet, useInlineStyles, key: "number" }),
+    text: renderSyntaxNode({ node: text, stylesheet, useInlineStyles, key: "text" }),
+  };
 }
+
+function renderCodeLines({ rows, stylesheet, useInlineStyles }: CodeLinesProps) {
+  return rows.map((row, index) => (
+    <CodeLine key={index} index={index} row={row} stylesheet={stylesheet} useInlineStyles={useInlineStyles} />
+  ));
+}
+
+const CODE_LINE_NUMBER_STYLE = { color: "var(--text-dim)", fontStyle: "normal", flexShrink: 0 };
+const CODE_CUSTOM_STYLE = {
+  margin: 0,
+  padding: "11px 13px",
+  fontSize: "calc(12.5px + var(--chat-font-size-offset, 0px))",
+  lineHeight: 1.62,
+  fontWeight: "var(--font-mono-weight)",
+  // The light `vs` theme puts its own 1px #ddd border on <pre>; the
+  // block's wrapper already draws the frame.
+  border: "none",
+  borderRadius: 0,
+  backgroundColor: "color-mix(in srgb, var(--bg) 92%, var(--bg-panel))",
+};
+const CODE_TAG_PROPS = { style: { fontFamily: "var(--font-mono)", fontWeight: "var(--font-mono-weight)" } };
+
+/** The highlighter alone, memoized on its inputs so folding never re-tokenizes. */
+const HighlightedCode = memo(function HighlightedCode({ code, language, isDark }: { code: string; language: string; isDark: boolean }) {
+  return (
+    <SyntaxHighlighter
+      language={language}
+      style={isDark ? codeBlockDarkTheme : vs}
+      showLineNumbers
+      lineNumberStyle={CODE_LINE_NUMBER_STYLE}
+      renderer={renderCodeLines}
+      customStyle={CODE_CUSTOM_STYLE}
+      codeTagProps={CODE_TAG_PROPS}
+    >
+      {code}
+    </SyntaxHighlighter>
+  );
+});
 
 /**
  * Syntax-highlighted code block with copy button.
@@ -366,6 +463,46 @@ function renderCodeLines({ rows, stylesheet, useInlineStyles }: CodeLinesProps) 
  * renders through the same highlighter as `text` (same lines, numbers and
  * box, no tokens) until an idle slice lets it take its language.
  */
+const NO_FOLD_RANGES: ReadonlyMap<number, number> = new Map();
+
+/** Lines per piece of a streaming fence. */
+const STREAM_CHUNK_LINES = 64;
+
+/** A finished piece of a streaming fence: same text, so React leaves it alone. */
+const FrozenCodeChunk = memo(function FrozenCodeChunk({ text }: { text: string }) {
+  return <span className="markdown-code-stream-chunk is-frozen">{text}</span>;
+});
+
+/**
+ * A streaming fence's text in pieces of STREAM_CHUNK_LINES lines. Each chunk
+ * only the last piece changes: React rewrites one short text node instead of
+ * the whole fence, and the finished pieces, laid out on their own
+ * (`content-visibility`, app/globals.css), are skipped while off screen.
+ */
+function StreamingCodeChunks({ code }: { code: string }) {
+  const pieces: string[] = [];
+  let start = 0;
+  let lines = 0;
+  for (let index = code.indexOf("\n"); index !== -1; index = code.indexOf("\n", index + 1)) {
+    lines += 1;
+    if (lines === STREAM_CHUNK_LINES) {
+      // The newline between pieces is the block break itself: kept in the
+      // text, a copied selection would get a blank line at every piece.
+      pieces.push(code.slice(start, index));
+      start = index + 1;
+      lines = 0;
+    }
+  }
+  const tail = code.slice(start);
+  return (
+    <>
+      {pieces.map((text, index) => <FrozenCodeChunk key={index} text={text} />)}
+      <span className="markdown-code-stream-chunk">{tail}</span>
+    </>
+  );
+}
+const NO_HIDDEN_LINES: readonly boolean[] = [];
+
 export const CodeBlock = memo(function CodeBlock({ code, lang, headerAction, isStreaming }: CodeBlockProps) {
   const { isDark } = useTheme();
   const { t } = useI18n();
@@ -381,6 +518,35 @@ export const CodeBlock = memo(function CodeBlock({ code, lang, headerAction, isS
     if (isStreaming || highlighted || !languagesReady) return;
     return waitForHighlight(() => setHighlighted(true));
   }, [isStreaming, highlighted, languagesReady]);
+
+  // No folds while streaming: the fence is plain text that grows every chunk.
+  // Once it settles, a long fence opens with its larger blocks folded
+  // (lib/code-folding.ts) until the reader toggles one; the reader's folds
+  // belong to this text, so a changed fence starts from its own defaults.
+  const lineCount = useMemo(() => code.split("\n").length, [code]);
+  const ranges = useMemo(() => (isStreaming ? NO_FOLD_RANGES : computeFoldRanges(code)), [code, isStreaming]);
+  const autoFolds = useMemo(() => autoFoldStarts(ranges, lineCount), [ranges, lineCount]);
+  const [folds, setFolds] = useState<{ code: string; collapsed: ReadonlySet<number> } | null>(null);
+  const collapsed = folds?.code === code ? folds.collapsed : autoFolds;
+  const toggle = useCallback((line: number) => {
+    setFolds((current) => {
+      const next = new Set(current?.code === code ? current.collapsed : autoFolds);
+      if (next.has(line)) next.delete(line);
+      else next.add(line);
+      return { code, collapsed: next };
+    });
+  }, [code, autoFolds]);
+  const fold = useMemo<CodeFold>(() => ({
+    ranges,
+    collapsed,
+    hidden: ranges.size === 0 || collapsed.size === 0 ? NO_HIDDEN_LINES : hiddenLines(ranges, collapsed, lineCount),
+    toggle,
+    labels: {
+      fold: t("i18n.foldCode"),
+      unfold: t("i18n.unfoldCode"),
+      folded: (count) => t("i18n.foldedLines", { count }),
+    },
+  }), [ranges, collapsed, toggle, lineCount, t]);
 
   const copy = () => {
     copyText(code).then(() => {
@@ -415,31 +581,12 @@ export const CodeBlock = memo(function CodeBlock({ code, lang, headerAction, isS
             backgroundColor: "color-mix(in srgb, var(--bg) 92%, var(--bg-panel))",
           }}
         >
-          <code style={{ fontFamily: "var(--font-mono)" }}>{code}</code>
+          <code style={{ fontFamily: "var(--font-mono)" }}><StreamingCodeChunks code={code} /></code>
         </pre>
       ) : (
-        <SyntaxHighlighter
-          language={highlighted ? lang || "text" : "text"}
-          style={isDark ? codeBlockDarkTheme : vs}
-          showLineNumbers
-          lineNumberStyle={{ color: "var(--text-dim)", fontStyle: "normal", flexShrink: 0 }}
-          renderer={renderCodeLines}
-          customStyle={{
-            margin: 0,
-            padding: "11px 13px",
-            fontSize: "calc(12.5px + var(--chat-font-size-offset, 0px))",
-            lineHeight: 1.62,
-            fontWeight: "var(--font-mono-weight)",
-            // The light `vs` theme puts its own 1px #ddd border on <pre>; the
-            // block's wrapper already draws the frame.
-            border: "none",
-            borderRadius: 0,
-            backgroundColor: "color-mix(in srgb, var(--bg) 92%, var(--bg-panel))",
-          }}
-          codeTagProps={{ style: { fontFamily: "var(--font-mono)", fontWeight: "var(--font-mono-weight)" } }}
-        >
-          {code}
-        </SyntaxHighlighter>
+        <CodeFoldContext.Provider value={fold}>
+          <HighlightedCode code={code} language={highlighted ? lang || "text" : "text"} isDark={isDark} />
+        </CodeFoldContext.Provider>
       )}
     </div>
   );

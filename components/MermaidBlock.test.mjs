@@ -69,9 +69,9 @@ function renderCode(props) {
   );
 }
 
-/** Each line's number, read off the row that pairs it with its text. */
+/** Each line's number, read off the row that pairs it with its text (after the fold gutter, when the block folds). */
 function lineRows(html) {
-  return [...html.matchAll(/<span class="markdown-code-line"><span class="linenumber react-syntax-highlighter-line-number"[^>]*>(\d+)<\/span><span class="(?:token )?markdown-code-line-text"/g)]
+  return [...html.matchAll(/<span class="markdown-code-line"(?: data-folded="true")?>(?:<span class="markdown-code-fold-spacer"[^>]*><\/span>|<button[^>]*class="markdown-code-fold"[^>]*>[\s\S]*?<\/button>)?<span class="linenumber react-syntax-highlighter-line-number"[^>]*>(\d+)<\/span><span class="(?:token )?markdown-code-line-text"/g)]
     .map((match) => match[1]);
 }
 
@@ -124,6 +124,45 @@ test("CodeBlock keeps a block comment's color on every line it spans", () => {
   assert.ok(first);
   assert.equal(middle, first);
   assert.deepEqual(lineRows(html), ["1", "2", "3", "4"]);
+});
+
+test("CodeBlock gives an indented block a fold toggle and flat code none", () => {
+  const nested = renderCode({ code: "def a():\n    if x:\n        y()\n    return 1", lang: "python" });
+  assert.equal(nested.match(/class="markdown-code-fold"/g)?.length, 2);
+  assert.equal(nested.match(/class="markdown-code-fold-spacer"/g)?.length, 2);
+  assert.match(nested, /aria-expanded="true"/);
+  assert.deepEqual(lineRows(nested), ["1", "2", "3", "4"]);
+
+  const flat = renderCode({ code: "a = 1\nb = 2\nc = 3", lang: "python" });
+  assert.doesNotMatch(flat, /markdown-code-fold/);
+  const streaming = renderCode({ code: "def a():\n    if x:\n        y()", lang: "python", isStreaming: true });
+  assert.doesNotMatch(streaming, /markdown-code-fold/);
+});
+
+test("CodeBlock folds a long fence's large blocks once it stops streaming, never while it streams", () => {
+  const fn = (name) => [`def ${name}():`, ...Array.from({ length: 15 }, (_, i) => `    step${i}()`), ""];
+  const code = [...fn("a"), ...fn("b"), ...fn("c")].join("\n");
+
+  const streaming = renderCode({ code, lang: "python", isStreaming: true });
+  assert.doesNotMatch(streaming, /markdown-code-fold/);
+  assert.match(streaming, /step14\(\)/);
+
+  const settled = renderCode({ code, lang: "python" });
+  assert.equal(settled.match(/data-folded="true"/g)?.length, 3);
+  assert.equal(settled.match(/class="markdown-code-fold-placeholder"/g)?.length, 3);
+  assert.doesNotMatch(settled, /step14/);
+  // Each def stays, its 15 body lines fold, the blank line after it shows.
+  assert.deepEqual(lineRows(settled), ["1", "17", "18", "34", "35", "51"]);
+});
+
+test("a streaming fence shows all its text in 64-line pieces, only the last one live", () => {
+  const code = Array.from({ length: 150 }, (_, i) => `line ${i}`).join("\n");
+  const html = renderCode({ code, lang: "text", isStreaming: true });
+  const pieces = [...html.matchAll(/<span class="markdown-code-stream-chunk( is-frozen)?">([^<]*)<\/span>/g)];
+  assert.deepEqual(pieces.map((m) => !!m[1]), [true, true, false]);
+  // Pieces are blocks: the line break between them is the block boundary.
+  assert.equal(pieces.map((m) => m[2]).join("\n"), code);
+  assert.equal(pieces[0][2], code.split("\n").slice(0, 64).join("\n"));
 });
 
 test("CodeBlock owns the pre background without a competing shorthand", () => {

@@ -1568,6 +1568,75 @@ pre, code {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+/* A streaming fence in pieces (CodeBlock): each piece is its own block, and a
+   finished one off screen skips layout and paint, sized by its last layout. */
+.markdown-code-stream-chunk {
+  display: block;
+}
+.markdown-code-stream-chunk.is-frozen {
+  content-visibility: auto;
+  contain-intrinsic-block-size: auto calc(64 * 1.62em);
+}
+
+/* Folding (lib/code-folding.ts): a gutter column before the numbers holds each
+   fold's toggle; a folded line ends in a "⋯ N lines" chip that unfolds it. */
+.markdown-code-fold,
+.markdown-code-fold-spacer {
+  flex: 0 0 14px;
+  align-self: flex-start;
+  height: 1.62em;
+}
+.markdown-code-fold {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 2px 0 -6px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s, background 0.12s, color 0.12s;
+}
+.markdown-code-fold-spacer {
+  margin: 0 2px 0 -6px;
+}
+/* Toggles show while the block is hovered or focused, and always on folded lines. */
+.markdown-code-block:hover .markdown-code-fold,
+.markdown-code-fold:focus-visible,
+.markdown-code-line[data-folded] .markdown-code-fold {
+  opacity: 1;
+}
+.markdown-code-fold:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+@media (hover: none) {
+  .markdown-code-fold { opacity: 0.7; }
+}
+.markdown-code-line[data-folded] .markdown-code-line-text {
+  flex: 0 1 auto;
+}
+.markdown-code-fold-placeholder {
+  flex: none;
+  align-self: flex-start;
+  margin-left: 8px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-subtle);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 0.9em;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.markdown-code-fold-placeholder:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
 /* An extension dialog measures its fences unwrapped (ChatWindow), so it still
    grows to show them whole where the screen allows. */
 .extension-dialog-measuring .markdown-code-line-text {
