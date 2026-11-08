@@ -15,6 +15,8 @@
   --hud-scanline: rgba(0, 0, 0, 0.05);
 }
 :where(html.dark) {
+  /* The terminal green is neon on dark panels: a touch of grey takes the edge off. */
+  --hud-green: color-mix(in srgb, var(--ansi-green) 82%, var(--text-dim));
   --hud-orange: #ff9a2e;
   --hud-scanline: rgba(0, 0, 0, 0.16);
 }
@@ -214,8 +216,24 @@ html[data-skin="pixel"] .chat-input-shell {
   border: 1px solid var(--accent);
   box-shadow: 0 0 0 1px var(--bg), 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
 }
+/* The caret is drawn by components/PixelCaret.tsx: a short, thick block. */
 html[data-skin="pixel"] .chat-input-textarea {
-  caret-color: var(--hud-green);
+  caret-color: transparent;
+}
+html[data-skin="pixel"] .pixel-caret {
+  position: fixed;
+  z-index: 40;
+  width: 3px;
+  background: var(--hud-green);
+  pointer-events: none;
+  animation: pixel-caret-blink 1.06s steps(1, end) infinite;
+}
+@keyframes pixel-caret-blink {
+  0% { opacity: 1; }
+  50% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-skin="pixel"] .pixel-caret { animation: none; }
 }
 html[data-skin="pixel"] .chat-input-textarea::placeholder {
   color: var(--text-dim);

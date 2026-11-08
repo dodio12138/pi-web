@@ -36,6 +36,8 @@ import { useFontPreferences } from "@/hooks/useFontPreferences";
 import type { ToolPreset } from "@/lib/tool-presets";
 import { SelectorRow } from "./SelectorRow";
 import { ModelSelector, type ModelSelectorOption } from "./ModelSelector";
+import { useSkin } from "@/hooks/useSkin";
+import { PixelCaret } from "./PixelCaret";
 
 export { filterModelOptions } from "./ModelSelector";
 
@@ -747,6 +749,7 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
     : {};
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const { skin } = useSkin();
   const toolDropdownRef = useRef<HTMLDivElement>(null);
   const thinkingDropdownRef = useRef<HTMLDivElement>(null);
   const controlsMenuRef = useRef<HTMLDivElement>(null);
@@ -2392,6 +2395,7 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
               overflow: "auto",
             }}
           />
+          <PixelCaret textareaRef={textareaRef} enabled={skin === "pixel"} value={value} />
 
           {isStreaming ? (
             <div style={{ display: "flex", alignItems: "stretch", gap: 6, flexShrink: 0, alignSelf: "flex-end" }}>
