@@ -319,6 +319,12 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
   const hasStreamingContent = useStreamingSelector(streamingStore, selectHasStreamingContent);
   const getStreamingMessage = useCallback(() => streamingStore.getState().streamingMessage, [streamingStore]);
   const sessionBusy = agentRunning || bashRunning;
+  // A run this view watched keeps the turn it finishes open: its Process
+  // details, shown as they happened, do not fold away the moment the answer
+  // lands. The view is keyed per session, so a switch or a reload starts
+  // folded again, and the next message folds the turn as it stops being last.
+  const [watchedRun, setWatchedRun] = useState(false);
+  if ((sessionBusy || isStreaming) && !watchedRun) setWatchedRun(true);
   // While this session's run is under way its chime may come with the phone
   // locked, where a suspended context cannot start again (#1157).
   useEffect(() => {
@@ -1275,6 +1281,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
                 if (processMessageCount === 0) rendered.push(...processViews);
                 else if (processViews.length > 0) {
                   const answered = collapsesProcessDetails(finalAnswerMessage);
+                  const keptOpen = answered && watchedRun && endIdx === messages.length && userIdx === lastAnchorIdx;
                   const processCacheMisses = summarizeCacheMisses(messages.slice(userIdx + 1, finalAnswerMessage ? finalAssistantIdx : finalAssistantIdx + 1));
                   rendered.push(
                     <div
@@ -1286,7 +1293,7 @@ export function ChatWindow({ session, searchTarget, onSearchTargetHandled, initi
                           would otherwise stay open once its answer shows up, e.g. when
                           switching between an answered and an unanswered leaf of the same
                           turn. Manual toggles survive every other re-render. */}
-                      <ProcessDetailsGroup key={answered ? "answered" : "unanswered"} messageCount={processMessageCount} toolCallCount={processToolCount} durationMs={turnDurationMs} cacheMisses={processCacheMisses} defaultExpanded={!answered} reveal={revealProcess} t={t}>
+                      <ProcessDetailsGroup key={answered ? keptOpen ? "answered-kept-open" : "answered" : "unanswered"} messageCount={processMessageCount} toolCallCount={processToolCount} durationMs={turnDurationMs} cacheMisses={processCacheMisses} defaultExpanded={!answered || keptOpen} reveal={revealProcess} t={t}>
                         {processViews}
                       </ProcessDetailsGroup>
                     </div>,
