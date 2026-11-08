@@ -2920,3 +2920,10 @@ select.mcp-add-input {
   color: var(--text-dim);
   direction: ltr;
 }
+.settings-workspace-uses {
+  margin: 14px 0 0;
+  padding-left: 18px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.7;
+}

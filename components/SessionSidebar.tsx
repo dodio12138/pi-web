@@ -260,6 +260,8 @@ export interface SessionSidebarControl {
   openFolderForNewSession(onPicked: (target: NewSessionTarget) => void, returnFocusTo: HTMLElement | null): void;
   /** "Use default directory": today's ~/pi-cwd folder, validated as the folder picker's, goes to `onPicked`. */
   openDefaultDirectoryForNewSession(onPicked: (target: NewSessionTarget) => void): void;
+  /** "Use workspace path" in the composer bar's project menu. */
+  openWorkspaceDirectoryForNewSession(onPicked: (target: NewSessionTarget) => void): void;
   /** Lists the worktrees of the sidebar's cwd again (the composer's worktree menu opening). */
   refreshWorktrees(): void;
   /** Creates a worktree of `project` and lists it at once; the caller starts the session in it. */
@@ -1291,6 +1293,19 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   // The composer's bar asks through the handle, which is made once.
   const handleDefaultCwdRef = useRef(handleDefaultCwd);
   handleDefaultCwdRef.current = handleDefaultCwd;
+  // "Use workspace path": the workspace (Settings › General › Workspace) is
+  // selected as "Use default directory" selects its folder. Unset, a toast
+  // says where to set it and nothing moves.
+  const handleWorkspaceCwd = useCallback(async (purpose: "files" | "new-session" = "files") => {
+    const workspace = await fetchWorkspaceDir();
+    if (!workspace) {
+      showToast(t("sidebar.workspaceNotSet"));
+      return;
+    }
+    await commitCustomPath(workspace, { remember: false, purpose });
+  }, [commitCustomPath, showToast, t]);
+  const handleWorkspaceCwdRef = useRef(handleWorkspaceCwd);
+  handleWorkspaceCwdRef.current = handleWorkspaceCwd;
 
   // Both pickers create through here: the worktree is listed at once, so
   // projectFor() keeps it in the project before the refetch lands, and
@@ -1383,6 +1398,11 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       folderReturnFocusRef.current = returnFocusTo;
       setCustomPathError(null);
       setCustomPathOpen("new-session");
+    },
+    openWorkspaceDirectoryForNewSession: (onPicked) => {
+      folderPickRef.current = onPicked;
+      folderReturnFocusRef.current = null;
+      void handleWorkspaceCwdRef.current("new-session");
     },
     openDefaultDirectoryForNewSession: (onPicked) => {
       folderPickRef.current = onPicked;
@@ -3191,6 +3211,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               onPick={handleFilesPick}
               onUseDefaultDirectory={() => { void handleDefaultCwd(); }}
               onOpenFolder={handleCustomPathClick}
+              onUseWorkspaceDirectory={() => { void handleWorkspaceCwd(); }}
               onRefreshWorktrees={refreshWorktrees}
               onCreateWorktree={createWorktree}
               onRemoveWorktree={handleRemoveWorktree}

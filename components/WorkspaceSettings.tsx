@@ -82,6 +82,11 @@ export function WorkspaceSettings() {
         )}
       </div>
       {error && <p role="alert" className="settings-general-error">{error}</p>}
+      <ul className="settings-workspace-uses">
+        <li>{t("settings.workspaceUseAgent")}</li>
+        <li>{t("settings.workspaceUseNewProject")}</li>
+        <li>{t("settings.workspaceUseContinue")}</li>
+      </ul>
       {picking && (
         <DirectoryPicker
           stacked

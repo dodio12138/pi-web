@@ -81,6 +81,8 @@ interface Props {
   /** A project or checkout other than the one in use was picked, or a checkout was just created. */
   onPick: (target: NewSessionTarget, from: ProjectWorktreeControl) => void;
   onUseDefaultDirectory: () => void;
+  /** "Use workspace path": the workspace (Settings › General › Workspace) itself, as "Use default directory" uses its folder. */
+  onUseWorkspaceDirectory?: () => void;
   /** "Open another project…": the folder picker. Focus goes back to `opener` when nothing moves. */
   onOpenFolder: (opener: HTMLElement | null) => void;
   onRefreshWorktrees: () => void;
@@ -211,6 +213,7 @@ export function ProjectWorktreePicker({
   handleRef,
   onPick,
   onUseDefaultDirectory,
+  onUseWorkspaceDirectory,
   onOpenFolder,
   onRefreshWorktrees,
   onCreateWorktree,
@@ -387,6 +390,13 @@ export function ProjectWorktreePicker({
         icon: <FolderIcon size={13} />,
         onSelect: () => onUseDefaultDirectory(),
       },
+      ...(onUseWorkspaceDirectory ? [{
+        type: "item",
+        id: "workspace-directory",
+        label: t("sidebar.useWorkspaceDirectory"),
+        icon: <FolderIcon size={13} />,
+        onSelect: () => onUseWorkspaceDirectory(),
+      } satisfies SidebarMenuItem] : []),
       {
         type: "item",
         id: "open-folder",

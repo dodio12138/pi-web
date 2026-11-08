@@ -22,6 +22,7 @@ interface Props {
   onUseDefaultDirectory: () => void;
   /** "Open another project…": the folder picker, which hands its folder to `onPick`. */
   onOpenFolder: (opener: HTMLElement | null) => void;
+  onUseWorkspaceDirectory?: () => void;
   onRefreshWorktrees: () => void;
   onCreateWorktree: (project: ProjectChoice, branch: string) => Promise<{ path: string } | { error: string }>;
 }
@@ -63,6 +64,7 @@ export function NewSessionContextBar({
   onPick,
   onUseDefaultDirectory,
   onOpenFolder,
+  onUseWorkspaceDirectory,
   onRefreshWorktrees,
   onCreateWorktree,
 }: Props) {
@@ -108,6 +110,7 @@ export function NewSessionContextBar({
         onPick={onPick}
         onUseDefaultDirectory={onUseDefaultDirectory}
         onOpenFolder={onOpenFolder}
+        onUseWorkspaceDirectory={onUseWorkspaceDirectory}
         onRefreshWorktrees={onRefreshWorktrees}
         onCreateWorktree={onCreateWorktree}
       />
