@@ -1750,6 +1750,89 @@
   grid-column: span 5;
 }
 
+.settings-theme-option[data-full] {
+  grid-column: 1 / -1;
+}
+
+/* Style (skin) tiles under the palettes: a mock title bar and the name, drawn in
+   the current palette; the pixel tile uses the pixel face and square edges. */
+.settings-skin-heading {
+  margin: 16px 0 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.settings-skin-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  max-width: 428px;
+  padding: 4px;
+}
+
+.settings-skin-option {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  height: 52px;
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+.settings-skin-tile {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg);
+}
+
+.settings-skin-bar {
+  flex: 0 0 10px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-skin-name {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.settings-skin-tile[data-skin-preview="pixel"] {
+  border-radius: 0;
+}
+
+.settings-skin-tile[data-skin-preview="pixel"] .settings-skin-bar {
+  background: var(--hud-bar, var(--accent));
+  border-bottom: 0;
+}
+
+.settings-skin-tile[data-skin-preview="pixel"] .settings-skin-name {
+  font-family: "Fusion Pixel 12px Proportional SC", sans-serif;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  -webkit-font-smoothing: none;
+}
+
+.settings-skin-option:has(input:checked) .settings-skin-tile {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.settings-skin-option:has(input:focus-visible) .settings-skin-tile {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .settings-theme-swatch {
   display: flex;
   flex: 1;

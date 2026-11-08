@@ -4,6 +4,8 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useTheme } from "@/hooks/useTheme";
+import { useSkin } from "@/hooks/useSkin";
+import { SKIN_OPTIONS } from "@/lib/skin";
 import { THEME_OPTIONS } from "@/lib/theme";
 import {
   CHAT_CONTENT_WIDTH_DEFAULT,
@@ -80,6 +82,7 @@ export function SettingsSectionIcon({ section, size = 16, strokeWidth = 1.8 }: {
 function GeneralSettings({ sessionId, onSessionReloaded, quoteSelectionEnabled, onQuoteSelectionChange }: Pick<Props, "sessionId" | "onSessionReloaded" | "quoteSelectionEnabled" | "onQuoteSelectionChange">) {
   const { locale, setLocale, supportedLocales, t } = useI18n();
   const { preference, setThemePreference } = useTheme();
+  const { skin, setSkinPreference } = useSkin();
   const { width: chatContentWidth, setWidth: setChatContentWidth, fontSize, setFontSize } = useChatAppearance();
   const enterSendMode = useEnterSendMode();
   const filesPlacement = useFilesPlacement();
@@ -225,6 +228,7 @@ function GeneralSettings({ sessionId, onSessionReloaded, quoteSelectionEnabled, 
                 className="settings-theme-option"
                 data-system={option.id === "auto" || undefined}
                 data-wide={option.id === "contrast-light" || option.id === "contrast-dark" || option.id === "zenburn" || undefined}
+                data-full={option.id === "starward" || undefined}
               >
                 <input
                   type="radio"
@@ -253,6 +257,27 @@ function GeneralSettings({ sessionId, onSessionReloaded, quoteSelectionEnabled, 
               </label>
             );
           })}
+        </div>
+        {/* The style is independent of the palette: each tile previews it in the current colors. */}
+        <h4 id="settings-skin-heading" className="settings-skin-heading">{t("settings.skin")}</h4>
+        <div role="radiogroup" aria-labelledby="settings-skin-heading" className="settings-skin-options">
+          {SKIN_OPTIONS.map((option) => (
+            <label key={option.id} className="settings-skin-option">
+              <input
+                type="radio"
+                name="skin"
+                value={option.id}
+                checked={skin === option.id}
+                onChange={() => setSkinPreference(option.id)}
+                className="sr-only"
+              />
+              <span className="settings-skin-tile" data-skin-preview={option.id} aria-hidden="true">
+                <span className="settings-skin-bar" />
+                <span className="settings-skin-name">{t(option.label)}</span>
+              </span>
+              <span className="sr-only">{t(option.label)}</span>
+            </label>
+          ))}
         </div>
       </section>
 

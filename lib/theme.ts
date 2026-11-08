@@ -1,5 +1,5 @@
 // Settings shows these as swatches: System, the light row, the dark row, then a row of three:
-// the high-contrast pair and Zenburn.
+// the high-contrast pair and Zenburn, then Starward (a pixel HUD skin) on a row of its own.
 // The rows line up by hue: each light theme sits above its dark counterpart; Rose and Slate have none.
 export const THEME_OPTIONS = [
   { id: "auto", label: "settings.themeSystem", scheme: null },
@@ -16,6 +16,7 @@ export const THEME_OPTIONS = [
   { id: "contrast-light", label: "settings.themeContrastLight", scheme: "light" },
   { id: "contrast-dark", label: "settings.themeContrastDark", scheme: "dark" },
   { id: "zenburn", label: "settings.themeZenburn", scheme: "dark" },
+  { id: "starward", label: "settings.themeStarward", scheme: "dark" },
 ] as const;
 
 export type ThemePreference = (typeof THEME_OPTIONS)[number]["id"];

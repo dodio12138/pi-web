@@ -283,6 +283,33 @@ html[data-theme="zenburn"],
   --bg-subtle: rgba(220,220,204,0.04);
 }
 
+/* Starward: a pixel flight-computer HUD. Deep-space panels, sky-blue title bars
+   and rules, a pixel CJK font; the pixel skin (app/skin-pixel.css) suits it best. */
+html[data-theme="starward"],
+[data-theme="starward"] {
+  color-scheme: dark;
+  --bg: #050a17;
+  --bg-panel: #0a1530;
+  --bg-hover: #12244a;
+  --bg-selected: #1a3363;
+  --border: #4f86c6;
+  --text: #dbe9fb;
+  --text-muted: #aac6e6;
+  --text-dim: #8fb0d6;
+  --accent: #8fd3ff;
+  --accent-hover: #bfe6ff;
+  --accent-contrast: #04102a;
+  --user-bg: #0e1f45;
+  --assistant-bg: #050a17;
+  --tool-bg: #0a1530;
+  --bg-subtle: rgba(143,211,255,0.05);
+  --hud-bar: #a6d6f7;
+  --hud-bar-text: #04102a;
+  --hud-green: #5fe36b;
+  --hud-yellow: #ffd23f;
+  --hud-orange: #ff9a2e;
+}
+
 /* WebKit reports dvh/innerHeight without the status-bar strip for installed
    home-screen apps even though the layout still starts at the screen's top.
    In standalone mode there is no browser toolbar to make vh unstable, and vh

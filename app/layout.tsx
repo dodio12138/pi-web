@@ -1,12 +1,16 @@
 import type { Metadata, Viewport } from "next";
 import { Noto_Sans_Mono } from "next/font/google";
 import { PwaRegistration } from "@/components/PwaRegistration";
+import { SKIN_INIT_SCRIPT } from "@/lib/skin";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import "katex/dist/katex.min.css";
+import "@fontsource/fusion-pixel-12px-proportional-sc/400.css";
+import "@fontsource/fusion-pixel-12px-monospaced-sc/400.css";
 import "./globals.css";
 import "./settings.css";
 import "./sidebar.css";
 import "./sidebar-menu.css";
+import "./skin-pixel.css";
 
 const notoSansMono = Noto_Sans_Mono({
   subsets: ["latin", "cyrillic"],
@@ -65,9 +69,12 @@ export default function RootLayout({
       <head>
         <link rel="manifest" href="/manifest.webmanifest" crossOrigin="use-credentials" />
         <meta name="google" content="notranslate" />
+        {/* Runs before first paint. Some browser extensions rewrite head scripts after that
+            (blank the body, add a src); theme and skin are already applied, so ignore the mismatch. */}
         <script
+          suppressHydrationWarning
           dangerouslySetInnerHTML={{
-            __html: THEME_INIT_SCRIPT,
+            __html: THEME_INIT_SCRIPT + SKIN_INIT_SCRIPT,
           }}
         />
       </head>

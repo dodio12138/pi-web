@@ -1,0 +1,327 @@
+/* Pixel HUD skin: a flight-computer look (pixel CJK font, square edges, sky
+   title bars, CRT scanlines, gauge sliders) layered over whichever palette is
+   active. It is on while html[data-skin="pixel"] is set (lib/skin.ts). HUD colors
+   come from the palette; a palette may define its own (Starward does). The pixel
+   fonts (Fusion Pixel, OFL) are only downloaded while the skin is on. */
+
+/* Defaults derived from any palette. :where() keeps them at zero specificity,
+   so a palette's own --hud-* values always win. */
+:where(html) {
+  --hud-bar: var(--accent);
+  --hud-bar-text: var(--accent-contrast);
+  --hud-green: var(--ansi-green);
+  --hud-yellow: var(--ansi-yellow);
+  --hud-orange: #b4540a;
+  --hud-scanline: rgba(0, 0, 0, 0.05);
+}
+:where(html.dark) {
+  --hud-orange: #ff9a2e;
+  --hud-scanline: rgba(0, 0, 0, 0.16);
+}
+
+html[data-skin="pixel"] {
+  --font-ui-default: "Fusion Pixel 12px Proportional SC", "Fusion Pixel 12px Monospaced SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono-default: "Fusion Pixel 12px Monospaced SC", "Fusion Pixel 12px Proportional SC", ui-monospace, monospace;
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: auto;
+  text-rendering: optimizeSpeed;
+}
+
+/* The Starward palette swatch: a title bar over a starfield. */
+.settings-theme-fill[data-theme="starward"] {
+  background:
+    linear-gradient(var(--hud-bar), var(--hud-bar)) top / 100% 8px no-repeat,
+    radial-gradient(1px 1px at 20% 60%, #dbe9fb 50%, transparent 51%),
+    radial-gradient(1px 1px at 70% 75%, #dbe9fb 50%, transparent 51%),
+    radial-gradient(1px 1px at 88% 40%, #8fd3ff 50%, transparent 51%),
+    var(--bg);
+}
+
+/* Square, hard-edged everything. */
+html[data-skin="pixel"] *,
+html[data-skin="pixel"] *::before,
+html[data-skin="pixel"] *::after {
+  border-radius: 0 !important;
+}
+
+html[data-skin="pixel"] ::selection {
+  background: var(--hud-bar);
+  color: var(--hud-bar-text);
+}
+
+/* CRT scanlines over the whole screen; they never take pointer events. */
+html[data-skin="pixel"] body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0,
+    rgba(0, 0, 0, 0) 2px,
+    var(--hud-scanline) 2px,
+    var(--hud-scanline) 3px
+  );
+}
+@media print {
+  html[data-skin="pixel"] body::after { display: none; }
+}
+
+/* Scrollbars: flat blocks on a ruled track. */
+html[data-skin="pixel"] ::-webkit-scrollbar-thumb,
+html[data-skin="pixel"] .scrollbar-subtle.scrollbar-visible::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 0;
+}
+html[data-skin="pixel"] ::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}
+
+/* ---- Title bars: sky-blue strips with dark text, like the HUD panel heads ---- */
+html[data-skin="pixel"] .sidebar-header,
+html[data-skin="pixel"] .sidebar-files-section {
+  background: var(--hud-bar);
+  color: var(--hud-bar-text);
+  border-color: var(--hud-bar);
+}
+html[data-skin="pixel"] .sidebar-header :is(button, span, svg),
+html[data-skin="pixel"] .sidebar-files-section :is(button, span, svg) {
+  color: var(--hud-bar-text);
+}
+/* Icon buttons on a title bar invert to dark-on-light's opposite: a navy key with a sky icon. */
+html[data-skin="pixel"] :is(.sidebar-header, .sidebar-files-section) :is(button, [role="button"]):has(svg):not(:disabled):hover {
+  background: var(--hud-bar-text) !important;
+  color: var(--hud-bar) !important;
+}
+html[data-skin="pixel"] :is(.sidebar-header, .sidebar-files-section) :is(button, [role="button"]):has(svg):not(:disabled):hover * {
+  color: inherit !important;
+}
+/* Code block heads: the same soft tint as table heads, quieter than panel title bars. */
+html[data-skin="pixel"] .markdown-code-header {
+  background: color-mix(in srgb, var(--hud-bar) 22%, var(--bg));
+  color: var(--text-muted);
+  border-bottom: 1px solid color-mix(in srgb, var(--hud-bar) 60%, var(--bg));
+}
+html[data-skin="pixel"] .markdown-code-header .markdown-code-action {
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--hud-bar) 60%, var(--bg));
+  color: var(--text-muted);
+  padding: 0 6px;
+}
+html[data-skin="pixel"] .markdown-code-header .markdown-code-action:hover {
+  background: var(--hud-bar);
+  border-color: var(--hud-bar);
+  color: var(--hud-bar-text);
+}
+
+/* Sidebar footer (Models · Skills · Settings): boxed HUD keys. */
+html[data-skin="pixel"] .session-sidebar + div > button {
+  border: 1px solid var(--border) !important;
+}
+html[data-skin="pixel"] .session-sidebar + div > button:hover {
+  border-color: var(--accent) !important;
+  background: var(--bg-hover) !important;
+}
+html[data-skin="pixel"] .sidebar-brand {
+  letter-spacing: 0.06em;
+}
+
+/* Project group rows read as panel sub-heads. */
+html[data-skin="pixel"] .session-tree-group {
+  border-bottom: 1px solid var(--border);
+}
+html[data-skin="pixel"] .session-tree-group-name {
+  color: var(--accent);
+}
+
+/* Selected session: an inverted tab, like the active HUD view button. */
+html[data-skin="pixel"] .session-tree-session.is-selected {
+  background: var(--hud-bar);
+  color: var(--hud-bar-text);
+  box-shadow: inset 3px 0 0 var(--hud-green);
+}
+html[data-skin="pixel"] .session-tree-session.is-selected :is(span, div, button, svg) {
+  color: var(--hud-bar-text);
+}
+
+/* ---- Chat ---- */
+html[data-skin="pixel"] .markdown-body :is(h1, h2, h3, h4) {
+  color: var(--accent);
+  font-weight: 400;
+  letter-spacing: 0.04em;
+}
+html[data-skin="pixel"] .markdown-body :is(h1, h2) {
+  border-bottom: 1px dashed var(--border);
+  padding-bottom: 4px;
+}
+html[data-skin="pixel"] .markdown-body :is(strong, b) {
+  color: var(--hud-green);
+  font-weight: 400;
+}
+html[data-skin="pixel"] .markdown-inline-code {
+  color: var(--hud-yellow);
+  background: color-mix(in srgb, var(--hud-yellow) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--hud-yellow) 35%, transparent);
+}
+html[data-skin="pixel"] .markdown-body a {
+  color: var(--accent);
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+html[data-skin="pixel"] .markdown-body blockquote {
+  border-left: 3px solid var(--hud-orange);
+  background: color-mix(in srgb, var(--hud-orange) 7%, transparent);
+  color: var(--text-muted);
+}
+html[data-skin="pixel"] .markdown-body li::marker {
+  color: var(--hud-green);
+}
+
+/* Code blocks and tables sit in ruled frames. */
+html[data-skin="pixel"] .markdown-code-block,
+html[data-skin="pixel"] .markdown-table-frame {
+  border: 1px solid var(--border);
+}
+/* Table heads: a soft tint of the title-bar color, not the full strip, so tables
+   stay quieter than the panel heads around them. */
+html[data-skin="pixel"] .markdown-table-frame thead th {
+  background: color-mix(in srgb, var(--hud-bar) 22%, var(--bg));
+  color: var(--text);
+  font-weight: 400;
+  border-bottom: 1px solid color-mix(in srgb, var(--hud-bar) 60%, var(--bg));
+}
+html[data-skin="pixel"] .markdown-table-frame td {
+  border-color: color-mix(in srgb, var(--border) 60%, transparent);
+}
+html[data-skin="pixel"] .markdown-code-line .linenumber {
+  color: var(--text-dim) !important;
+}
+
+/* Fold toggles and the folded-lines chip read as HUD keys. */
+html[data-skin="pixel"] .markdown-code-fold-placeholder {
+  border-color: color-mix(in srgb, var(--hud-bar) 60%, var(--bg));
+  color: var(--hud-yellow);
+}
+html[data-skin="pixel"] .markdown-code-fold-placeholder:hover {
+  background: var(--hud-bar);
+  border-color: var(--hud-bar);
+  color: var(--hud-bar-text);
+}
+
+/* Composer: a terminal input with a prompt caret and a framed bar. */
+html[data-skin="pixel"] .chat-input-shell {
+  border: 1px solid var(--accent);
+  box-shadow: 0 0 0 1px var(--bg), 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+html[data-skin="pixel"] .chat-input-textarea {
+  caret-color: var(--hud-green);
+}
+html[data-skin="pixel"] .chat-input-textarea::placeholder {
+  color: var(--text-dim);
+}
+
+/* Icon buttons everywhere else invert on hover: a lit sky-blue key with a navy icon.
+   !important beats the hover colors some components set inline from JS. */
+html[data-skin="pixel"] :is(button, [role="button"], a):has(> svg, > span > svg):not(:disabled):not([aria-disabled="true"]):not(.session-tree-session):not(.session-tree-group):not(:is(.sidebar-header, .sidebar-files-section, .session-tree-session.is-selected) *):hover {
+  background: var(--hud-bar) !important;
+  color: var(--hud-bar-text) !important;
+}
+html[data-skin="pixel"] :is(button, [role="button"], a):has(> svg, > span > svg):not(:disabled):not([aria-disabled="true"]):not(.session-tree-session):not(.session-tree-group):not(:is(.sidebar-header, .sidebar-files-section, .session-tree-session.is-selected) *):hover * {
+  color: inherit !important;
+}
+
+/* Inside the sky-blue selected session row, row actions invert the other way. */
+html[data-skin="pixel"] .session-tree-session.is-selected :is(button, [role="button"]):has(svg):not(:disabled):hover {
+  background: var(--hud-bar-text) !important;
+  color: var(--hud-bar) !important;
+}
+html[data-skin="pixel"] .session-tree-session.is-selected :is(button, [role="button"]):has(svg):not(:disabled):hover * {
+  color: inherit !important;
+}
+
+/* ---- Range sliders: a segmented gauge track and a square block thumb ---- */
+html[data-skin="pixel"] input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 18px;
+  background: transparent;
+  cursor: pointer;
+}
+html[data-skin="pixel"] input[type="range"]::-webkit-slider-runnable-track {
+  height: 10px;
+  border: 1px solid var(--border);
+  background:
+    repeating-linear-gradient(to right, color-mix(in srgb, var(--accent) 35%, transparent) 0 3px, transparent 3px 5px) 2px 2px / calc(100% - 4px) 4px no-repeat,
+    var(--bg-panel);
+}
+html[data-skin="pixel"] input[type="range"]::-moz-range-track {
+  height: 8px;
+  border: 1px solid var(--border);
+  background:
+    repeating-linear-gradient(to right, color-mix(in srgb, var(--accent) 35%, transparent) 0 3px, transparent 3px 5px) 2px 2px / calc(100% - 4px) 4px no-repeat,
+    var(--bg-panel);
+}
+html[data-skin="pixel"] input[type="range"]::-moz-range-progress {
+  height: 8px;
+  background: repeating-linear-gradient(to right, var(--hud-green) 0 3px, transparent 3px 5px);
+}
+html[data-skin="pixel"] input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 10px;
+  height: 18px;
+  margin-top: -5px;
+  border: 1px solid var(--hud-bar-text);
+  border-radius: 0;
+  background: var(--hud-bar);
+  box-shadow: 0 0 0 1px var(--hud-bar), inset 0 -3px 0 color-mix(in srgb, var(--hud-bar-text) 25%, transparent);
+}
+html[data-skin="pixel"] input[type="range"]::-moz-range-thumb {
+  width: 8px;
+  height: 16px;
+  border: 1px solid var(--hud-bar-text);
+  border-radius: 0;
+  background: var(--hud-bar);
+}
+html[data-skin="pixel"] input[type="range"]:hover::-webkit-slider-thumb,
+html[data-skin="pixel"] input[type="range"]:active::-webkit-slider-thumb {
+  background: var(--hud-green);
+  box-shadow: 0 0 0 1px var(--hud-green);
+}
+html[data-skin="pixel"] input[type="range"]:hover::-moz-range-thumb {
+  background: var(--hud-green);
+}
+html[data-skin="pixel"] input[type="range"]:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* ---- Switches: square indicator lamps, green when on ---- */
+html[data-skin="pixel"] .config-switch {
+  border-color: var(--border);
+  background: var(--bg-panel);
+}
+html[data-skin="pixel"] .config-switch-knob {
+  background: var(--text-dim);
+}
+html[data-skin="pixel"] .config-switch[aria-checked="true"] {
+  border-color: var(--hud-green);
+  background: var(--hud-green);
+}
+html[data-skin="pixel"] .config-switch[aria-checked="true"] .config-switch-knob {
+  background: var(--hud-bar-text);
+}
+html[data-skin="pixel"] .config-switch:not(:disabled):hover {
+  border-color: var(--accent);
+}
+html[data-skin="pixel"] .config-switch[aria-checked="true"]:not(:disabled):hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--hud-green) 80%, var(--text));
+}
+
+/* Focus rings: a hard 1px HUD outline. */
+html[data-skin="pixel"] :focus-visible {
+  outline: 1px solid var(--hud-green);
+  outline-offset: 1px;
+}
