@@ -3079,3 +3079,8 @@ span.token.table {
     display: none !important;
   }
 }
+
+/* The composer's run buttons (side chat, steer, follow-up): solid, in their own colors. */
+.chat-run-action:not(:disabled):hover {
+  filter: brightness(1.12);
+}

@@ -241,11 +241,11 @@ html[data-skin="pixel"] .chat-input-textarea::placeholder {
 
 /* Icon buttons everywhere else invert on hover: a lit sky-blue key with a navy icon.
    !important beats the hover colors some components set inline from JS. */
-html[data-skin="pixel"] :is(button, [role="button"], a):has(> svg, > span > svg):not(:disabled):not([aria-disabled="true"]):not(.session-tree-session):not(.session-tree-group):not(:is(.sidebar-header, .sidebar-files-section, .session-tree-session.is-selected) *):hover {
+html[data-skin="pixel"] :is(button, [role="button"], a):has(> svg, > span > svg):not(:disabled):not([aria-disabled="true"]):not(.session-tree-session):not(.session-tree-group):not(.chat-run-action):not(:is(.sidebar-header, .sidebar-files-section, .session-tree-session.is-selected) *):hover {
   background: var(--hud-bar) !important;
   color: var(--hud-bar-text) !important;
 }
-html[data-skin="pixel"] :is(button, [role="button"], a):has(> svg, > span > svg):not(:disabled):not([aria-disabled="true"]):not(.session-tree-session):not(.session-tree-group):not(:is(.sidebar-header, .sidebar-files-section, .session-tree-session.is-selected) *):hover * {
+html[data-skin="pixel"] :is(button, [role="button"], a):has(> svg, > span > svg):not(:disabled):not([aria-disabled="true"]):not(.session-tree-session):not(.session-tree-group):not(.chat-run-action):not(:is(.sidebar-header, .sidebar-files-section, .session-tree-session.is-selected) *):hover * {
   color: inherit !important;
 }
 

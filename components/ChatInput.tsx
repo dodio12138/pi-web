@@ -2337,7 +2337,7 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
                 ? "rgba(234,179,8,0.4)"
                 : "color-mix(in srgb, var(--border) 70%, transparent)"}`,
               borderRadius: compact ? 0 : 14,
-              padding: compact ? 0 : isMobile ? "6px 6px 6px 12px" : "10px 10px 10px 14px",
+              padding: compact ? 0 : isMobile ? "5px 5px 5px 12px" : "7px 8px 7px 14px",
               boxShadow: compact ? "none" : "0 1px 2px rgba(15,23,42,0.04), 0 8px 24px -12px rgba(15,23,42,0.10)",
               transition: "border-color 0.15s, background 0.15s, box-shadow 0.15s",
             } as React.CSSProperties}
@@ -2406,14 +2406,18 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
                   disabled={!value.trim() || attachedImages.length > 0}
                   title={t("chat.sideChatHint")}
                   aria-label={t("chat.sideChat")}
-                  className={`bg-transparent ${value.trim() && !attachedImages.length ? "cursor-pointer text-text-muted hover:bg-bg-hover hover:text-text" : "cursor-not-allowed text-text-dim"}`}
+                  className="chat-run-action"
                   style={{
-                    width: 38,
+                    width: 34,
                     display: "grid", placeItems: "center",
                     padding: 0,
-                    border: "1px solid var(--border)",
+                    background: "var(--accent)",
+                    border: "none",
                     borderRadius: 8,
-                    transition: "background 0.12s",
+                    color: "var(--accent-contrast)",
+                    cursor: value.trim() && !attachedImages.length ? "pointer" : "not-allowed",
+                    opacity: value.trim() && !attachedImages.length ? 1 : 0.4,
+                    transition: "filter 0.12s, opacity 0.12s",
                   }}
                 >
                   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -2427,16 +2431,18 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
                   disabled={!canQueueStreamingMessage}
                   title={t("chat.steerHint")}
                   aria-label={t("chat.steer")}
+                  className="chat-run-action"
                   style={{
                     display: "flex", alignItems: "center", gap: 5,
-                    padding: "7px 12px",
-                    background: canQueueStreamingMessage ? "rgba(234,179,8,0.12)" : "none",
-                    border: "1px solid rgba(234,179,8,0.35)",
+                    padding: "6px 12px",
+                    background: "#eab308",
+                    border: "none",
                     borderRadius: 8,
-                    color: canQueueStreamingMessage ? "rgba(180,130,0,1)" : "var(--text-dim)",
+                    color: "#1f1600",
                     cursor: canQueueStreamingMessage ? "pointer" : "not-allowed",
+                    opacity: canQueueStreamingMessage ? 1 : 0.4,
                     fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em",
-                    transition: "background 0.12s",
+                    transition: "filter 0.12s, opacity 0.12s",
                   }}
                 >
                   <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -2452,16 +2458,18 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
                   title={`${t("chat.followUpHint")} (${isMobile ? "Ctrl/Cmd+" : ""}Alt/Option+Enter)`}
                   aria-label={t("chat.followUp")}
                   aria-keyshortcuts={isMobile ? "Control+Alt+Enter Meta+Alt+Enter" : "Alt+Enter"}
+                  className="chat-run-action"
                   style={{
                     display: "flex", alignItems: "center", gap: 5,
-                    padding: "7px 12px",
-                    background: canQueueStreamingMessage ? "rgba(129,140,248,0.12)" : "none",
-                    border: "1px solid rgba(129,140,248,0.35)",
+                    padding: "6px 12px",
+                    background: "#6366f1",
+                    border: "none",
                     borderRadius: 8,
-                    color: canQueueStreamingMessage ? "rgba(99,102,241,1)" : "var(--text-dim)",
+                    color: "#ffffff",
                     cursor: canQueueStreamingMessage ? "pointer" : "not-allowed",
+                    opacity: canQueueStreamingMessage ? 1 : 0.4,
                     fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em",
-                    transition: "background 0.12s",
+                    transition: "filter 0.12s, opacity 0.12s",
                   }}
                 >
                   <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -2483,7 +2491,7 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
                 alignSelf: "flex-end",
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
                 // Mobile: icon-only so the placeholder and draft keep the width.
-                ...(isMobile ? { width: 36, height: 36, padding: 0 } : { padding: "7px 14px" }),
+                ...(isMobile ? { width: 34, height: 34, padding: 0 } : { padding: "6px 14px" }),
                 background: (value.trim() || attachedImages.length) ? "var(--accent)" : "var(--bg-panel)",
                 border: "none",
                 borderRadius: 8,
