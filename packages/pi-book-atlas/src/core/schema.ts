@@ -6,6 +6,8 @@
 // state. Validation returns a list of problems instead of throwing, so a tool
 // or the UI can say exactly which field is wrong.
 
+import { CLC_MAX_CODES, CLC_SCHEME, clcCandidates, clcClassOf } from "./clc";
+
 export const SCHEMA_VERSION = 1;
 
 export const VERIFICATION = ["pending", "partial", "verified"] as const;
@@ -261,6 +263,15 @@ const VALIDATORS: Record<ObjectKind, (obj: Record<string, unknown>, problems: Pr
       problems.push({ path: "classification", message: "must be { scheme_id, scheme_version, codes[] } (null when unknown)" });
     } else if (c.codes.length > 0 && !c.scheme_id) {
       problems.push({ path: "classification.codes", message: "need a scheme_id: a code means nothing outside its scheme" });
+    } else if (c.scheme_id === CLC_SCHEME) {
+      // 中图法: one main second-level class first, at most two others.
+      if (c.codes.length > CLC_MAX_CODES) problems.push({ path: "classification.codes", message: `at most ${CLC_MAX_CODES} classes: the main one first` });
+      c.codes.forEach((code, i) => {
+        if (typeof code !== "string" || !clcClassOf(code)) {
+          const near = typeof code === "string" ? clcCandidates(code) : [];
+          problems.push({ path: `classification.codes.${i}`, message: `"${String(code)}" is not a 中图法 second-level class${near.length ? `; under ${String(code).charAt(0).toUpperCase()}: ${near.join("；")}` : ""}` });
+        }
+      });
     }
     tagBindings(obj, problems);
     strList(obj, "entry_questions", problems);

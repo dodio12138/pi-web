@@ -253,3 +253,50 @@ test("a torn last line in a conversation log is skipped, and the next append sta
   await host.emit("agent_settled", {});
   assert.deepEqual(host.log().messages("session-abc").map((m) => m.text), ["第一条", "第二条"]);
 });
+
+test("learning sessions carry the compact reading lenses and the classification rule", async (t) => {
+  const host = await fakePi(t);
+  await host.command("on");
+  const event = { messageType: "user", prompt: "聊聊这本书", systemPromptOptions: { sections: {} } };
+  await host.emit("before_agent_start", event);
+  const section = event.systemPromptOptions.sections["pi-book-atlas"];
+  assert.match(section, /读书透镜/);
+  for (const lens of core.READING_LENSES) assert.ok(section.includes(lens.label), lens.label);
+  assert.doesNotMatch(section, /观察记录、实验测量/, "answer lists stay out of every turn");
+  assert.match(section, /中图法/);
+  assert.match(section, /3–5 core tags/);
+});
+
+test("/atlas guide walks one book through the lenses and writes its card, class and core tags", async (t) => {
+  const host = await fakePi(t);
+  await host.command("guide");
+  assert.match(host.notices.at(-1).text, /Usage: \/atlas guide/);
+
+  await host.command("guide 《控制论》");
+  let prompt = host.sent.at(-1);
+  assert.ok(prompt.startsWith("用读书透镜带我过一遍这本书（Pi Book Atlas）：《控制论》"), prompt);
+  assert.match(prompt, /还没有这本书/);
+  assert.match(prompt, /## 读书透镜/);
+  assert.match(prompt, /观察记录/, "the guided pass shows the answers to choose from");
+  assert.match(prompt, /TP 自动化技术、计算机技术/, "and the classes to choose from");
+  assert.match(prompt, /不要编造原文引文、页码或章节/);
+
+  const made = await host.tool("atlas_apply_patch", { operations: [
+    { op: "create_tag", ref: "$fb", fields: { type: "topic", name: "反馈" } },
+    { op: "create_book", fields: { title: "控制论", authors: ["维纳"], classification: { scheme_id: "clc", scheme_version: "5", codes: ["TP", "N94"] },
+      tag_bindings: [{ tag_id: "$fb", coverage: "core", assigned_by: "ai_inference", source_refs: [] }] } },
+  ] });
+  assert.equal(made.ok, true, JSON.stringify(made));
+  await host.command("guide 控制论");
+  prompt = host.sent.at(-1);
+  assert.match(prompt, /可能已有这本书：控制论（book-/);
+  assert.match(prompt, /现在的分类：TP 自动化技术、计算机技术；N94 系统科学；core 标签：反馈/);
+
+  // Like organize, the guide run writes the card itself: nothing in it waits to be organized.
+  await host.command("on");
+  const u1 = host.say("user", "反馈是什么");
+  host.say("user", prompt);
+  host.say("assistant", "核心问题：……");
+  await host.emit("agent_settled", {});
+  assert.deepEqual(host.log().pending("session-abc").map((m) => m.entry_id), [u1]);
+});

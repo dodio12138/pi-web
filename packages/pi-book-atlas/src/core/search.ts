@@ -1,3 +1,4 @@
+import { CLC_SCHEME, CLC_SECOND_LEVEL, clcClassOf, clcLabel } from "./clc";
 import { kindOfId, type Book, type KnowledgeNode, type ObjectKind } from "./schema";
 import type { AtlasStore } from "./store";
 import { coverageRank, findTagsByLabel, normalizeLabel, resolveTag } from "./tags";
@@ -65,6 +66,8 @@ interface Entry {
   title: string;
   labels: string[];
   questions: string[];
+  /** A book's 中图法 classes, main first: the code, its label, and the words of its name. */
+  classes: { label: string; words: string[] }[];
   text: Set<string>;
   coverage: Map<string, number>;
   archived: boolean;
@@ -87,6 +90,11 @@ function buildIndex(store: AtlasStore): Entry[] {
       id: book.id, kind: "book", title: book.title,
       labels: [book.title, ...Object.values(book.external_ids)],
       questions: book.entry_questions,
+      classes: book.classification.scheme_id === CLC_SCHEME ? book.classification.codes.flatMap((code) => {
+        const cls = clcClassOf(code);
+        if (!cls) return [];
+        return [{ label: clcLabel(code)!, words: [code, cls, CLC_SECOND_LEVEL[cls], ...CLC_SECOND_LEVEL[cls].split(/[、（）()]/)].map(normalizeLabel).filter((w) => w.length >= 2) }];
+      }) : [],
       text: new Set(tokenize([book.title, book.authors.join(" "), book.entry_questions.join(" "), book.body].join("\n"))),
       coverage: bound(book), archived: Boolean(book.archived),
     });
@@ -96,6 +104,7 @@ function buildIndex(store: AtlasStore): Entry[] {
       id: node.id, kind: "node", title: node.title,
       labels: [node.title, ...node.aliases],
       questions: node.type === "question" ? [node.title] : [],
+      classes: [],
       text: new Set(tokenize([node.title, node.aliases.join(" "), node.summary, node.body].join("\n"))),
       coverage: bound(node), archived: Boolean(node.archived),
     });
@@ -106,6 +115,7 @@ function buildIndex(store: AtlasStore): Entry[] {
       id: tag.id, kind: "tag", title: tag.name,
       labels: [tag.name, ...tag.aliases],
       questions: tag.type === "question" ? [tag.name] : [],
+      classes: [],
       text: new Set(tokenize([tag.name, tag.aliases.join(" "), tag.definition].join("\n"))),
       coverage: new Map(), archived: tag.status === "archived",
     });
@@ -172,6 +182,9 @@ export function search(store: AtlasStore, query: string, options: SearchOptions 
           reasons.push(`tag: ${tag.name} (${COVERAGE_NAME[rank]})`);
         }
       }
+      // A class by its code or name: "D0", "政治学", "伦理学有哪些书". The main class counts most.
+      const cls = entry.classes.findIndex((c) => c.words.some((w) => w === wanted || wanted.includes(w)));
+      if (cls >= 0) { score += cls === 0 ? 110 : 70; reasons.push(`class: ${entry.classes[cls].label}`); }
       const question = entry.questions.find((q) => normalizeLabel(q) === wanted || normalizeLabel(q).includes(wanted));
       if (question) { score += 150; reasons.push(`question: ${question}`); }
       if (label === undefined && wanted.length > 1 && normalizeLabel(entry.title).includes(wanted)) { score += 100; reasons.push("title contains"); }

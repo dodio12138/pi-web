@@ -12,3 +12,5 @@ export { search, tokenize, type SearchHit, type SearchOptions } from "./search";
 export { BACKUP_FORMAT, exportBackup, importBackup, type AtlasBackup, type ImportReport } from "./backup";
 export { ConversationLog, textHash, type CapturedMessage, type OrganizedMark } from "./conversations";
 export { buildContext, describe, type ContextPack, type ContextRequest, type ObjectView } from "./context";
+export { READING_LENSES, readingLensPrompt, readingLensTemplate, type ReadingLens } from "./reading-guide";
+export { BOOK_CORE_TAGS, CLC_CLASSES, CLC_MAX_CODES, CLC_SCHEME, CLC_SECOND_LEVEL, CLC_VERSION, clcCandidates, clcClassOf, clcLabel, clcPrompt } from "./clc";

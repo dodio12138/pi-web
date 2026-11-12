@@ -10,6 +10,11 @@ import {
   exportBackup,
   importBackup,
   openAtlas,
+  BOOK_CORE_TAGS,
+  clcLabel,
+  clcPrompt,
+  readingLensPrompt,
+  readingLensTemplate,
   search,
   type AtlasStore,
   type ObjectKind,
@@ -26,6 +31,8 @@ import {
 const MODE_ENTRY = "pi-book-atlas/mode";
 /** First line of the request /atlas organize sends: that run is about the library, not new knowledge. */
 const ORGANIZE_HEADER = "整理本次讨论进知识库（Pi Book Atlas）。";
+/** First line of the request /atlas guide sends: that run writes the book card itself. */
+const GUIDE_HEADER = "用读书透镜带我过一遍这本书（Pi Book Atlas）：";
 const SECTION = "pi-book-atlas";
 
 interface Settings {
@@ -57,10 +64,13 @@ export function visibleText(message: { role?: string; content?: unknown }): stri
 const GUIDANCE = `This is a learning session connected to the user's book and knowledge library (Pi Book Atlas). Use the atlas_* tools:
 - Look before writing: atlas_get_context or atlas_search for the books, concepts and questions in play; atlas_read for an object's full text, relations and sources.
 - Write with atlas_apply_patch. Prefer updating an existing node over creating one; a refused duplicate names the existing id to update. One node per knowledge point that can be explained, searched or applied on its own (concept, claim, method, skill, question, example). Small talk and confirmations make no node.
+- Every book card is placed precisely: one main 中图法 (CLC, 5th ed.) second-level class, e.g. classification {scheme_id:"clc", scheme_version:"5", codes:["D0"]} (≤2 more for books across fields), plus ${BOOK_CORE_TAGS.min}–${BOOK_CORE_TAGS.max} core tags for what the class cannot say (its topics, questions or methods). Revise both when the discussion shows the book better: update_book for the class, bind_tag/unbind_tag for the tags. An unknown code is refused with the classes to choose from.
 - Reuse existing tags (search first; a duplicate name or alias is refused with the existing id). Mark coverage honestly: core, discussed or mentioned.
 - Relations say what they mean: supports, refutes, qualifies, requires, explains… use related_to only when nothing more precise holds. A challenge to a view is a new refutes/qualifies relation, not an overwrite.
 - Attribution and evidence: your own explanations are ai_synthesis with verification pending; author_claim only with a source that shows it. Never invent quotations, page numbers or chapter locations: without the text, give a paraphrase and mark it unverified.
-- Cite this conversation with the source ref "$conversation" (created for you). Pass the message ids the knowledge came from as source_message_ids.`;
+- Cite this conversation with the source ref "$conversation" (created for you). Pass the message ids the knowledge came from as source_message_ids.
+
+${readingLensPrompt()}`;
 
 function guidanceWithHints(store: AtlasStore | null, prompt: string | undefined): string {
   if (!store || !prompt?.trim()) return GUIDANCE;
@@ -105,8 +115,9 @@ export default function piBookAtlas(pi: ExtensionAPI) {
     if (!enabled(ctx)) return 0;
     const { log } = atlas();
     const messages = [];
-    // The organize request and the replies of its run are kept like any visible
-    // message, but there is nothing in them to organize.
+    // The organize and guide requests and the replies of their runs are kept
+    // like any visible message, but there is nothing left in them to organize:
+    // an organize run stores what came before, a guide run writes the card.
     const housekeeping: string[] = [];
     let inOrganizeRun = false;
     for (const entry of ctx.sessionManager.getBranch()) {
@@ -114,7 +125,7 @@ export default function piBookAtlas(pi: ExtensionAPI) {
       const role = (entry.message as { role?: string }).role;
       if (role !== "user" && role !== "assistant") continue;
       const text = visibleText(entry.message as { content?: unknown });
-      if (role === "user") inOrganizeRun = text.startsWith(ORGANIZE_HEADER);
+      if (role === "user") inOrganizeRun = text.startsWith(ORGANIZE_HEADER) || text.startsWith(GUIDE_HEADER);
       if (!text) continue;
       if (inOrganizeRun) housekeeping.push(entry.id);
       messages.push({ entry_id: entry.id, parent_id: entry.parentId, role, text, timestamp: entry.timestamp ?? null, machine: hostname(), workspace: ctx.cwd } as const);
@@ -217,7 +228,7 @@ export default function piBookAtlas(pi: ExtensionAPI) {
     name: "atlas_apply_patch",
     label: "Atlas update",
     description: `Change the knowledge library in one all-or-nothing patch. Operations (each an object with "op"):
-create_book {ref?, fields:{title, authors?, entry_questions?, tag_bindings?, source_refs?, body?}} · update_book {id, changes}
+create_book {ref?, fields:{title, authors?, classification?: {scheme_id: "clc", scheme_version: "5", codes: [main 中图法 second-level class, ≤2 others]}, entry_questions?, tag_bindings?, source_refs?, body?}} · update_book {id, changes}
 create_node {ref?, fields:{type: concept|claim|method|skill|question|example, title, summary?, aliases?, body?, attribution, tag_bindings?, source_refs?}} · update_node {id, changes}
 create_tag {ref?, fields:{type: domain|topic|question|method, name, definition?, aliases?, parent_ids?}} · update_tag {id, changes} · merge_tags {from_ids, into_id}
 create_relation {ref?, fields:{from_id, to_id, type, attribution, scope?, note?, source_refs?}} · update_relation {id, changes}
@@ -280,7 +291,7 @@ A refused patch writes nothing and says why: duplicates name the existing id, re
   // ---- /atlas ------------------------------------------------------------
 
   pi.registerCommand("atlas", {
-    description: "Book Atlas: status | on | off | organize [note] | search <words> | export <file> | import <file>",
+    description: "Book Atlas: status | on | off | organize [note] | guide <书名> | search <words> | export <file> | import <file>",
     handler: async (args, ctx) => {
       const [sub = "status"] = args.trim().split(/\s+/).filter(Boolean);
       const arg = args.trim().slice(sub.length).trim();
@@ -333,6 +344,41 @@ A refused patch writes nothing and says why: duplicates name the existing id, re
             ].join("\n"));
             return;
           }
+          case "guide": {
+            const title = arg.replace(/^《|》$/g, "").trim();
+            if (!title) {
+              notify("Usage: /atlas guide <书名>", "warning");
+              return;
+            }
+            const { store } = atlas();
+            const known = search(store, title, { kinds: ["book"], limit: 3 }).filter((h) => h.score >= 100);
+            const current = known.flatMap((h) => {
+              const book = store.books.get(h.id);
+              if (!book) return [];
+              const classes = book.classification.scheme_id === "clc" ? book.classification.codes.map((c) => clcLabel(c) ?? c) : book.classification.codes;
+              const tags = book.tag_bindings.filter((b) => b.coverage === "core").map((b) => store.tags.get(b.tag_id)?.name ?? b.tag_id);
+              return [`《${book.title}》现在的分类：${classes.join("；") || "无"}；core 标签：${tags.join("、") || "无"}。`];
+            });
+            pi.sendUserMessage([
+              `${GUIDE_HEADER}《${title}》`,
+              known.length
+                ? `知识库里可能已有这本书：${known.map((h) => `${h.title}（${h.id}）`).join("、")}。先用 atlas_read 读它的索引卡，在原有内容上补充，不要另建一张。`
+                : "知识库里还没有这本书：先用 atlas_search 确认，确实没有再用 create_book 建索引卡（书名、作者；不确定的元信息留空）。",
+              ...current,
+              "",
+              readingLensPrompt({ options: true }),
+              "",
+              `中图法二级类目（第五版）：\n${clcPrompt()}`,
+              "",
+              "逐个透镜说说你对这本书的理解，用我能看懂的话，每个透镜两三句。说完用一个 atlas_apply_patch 写进书的索引卡：",
+              `- 正文追加（或更新已有的）下面这一节，括号里的问题换成你的回答，答不出的透镜保留问题、写「待讨论」：\n\n${readingLensTemplate()}`,
+              "- 「核心问题」里的问题同时写进 entry_questions；值得单独讨论的写成 question 节点并用关系连到书。",
+              `- 分类：classification 设为 {scheme_id:"clc", scheme_version:"5", codes:[主类, …]}，一个中图法二级主类在前，跨领域的书最多再加两个；另外用 ${BOOK_CORE_TAGS.min}–${BOOK_CORE_TAGS.max} 个 core 标签补充类目说不清的主题、问题或方法（先查已有标签再新建，用词要准、短）。已有分类和标签就核对，不合适的改掉、解绑。`,
+              "- 归属用 ai_synthesis、核验状态 pending，来源引用 \"$conversation\"；这是你的概括，不是作者原话。",
+              "不要编造原文引文、页码或章节；对这本书了解不够就直说，留给我们之后一起读。最后问我想从哪个透镜深入。",
+            ].join("\n"));
+            return;
+          }
           case "search": {
             const { store } = atlas();
             const hits = search(store, arg, { limit: 10 });
@@ -361,7 +407,7 @@ A refused patch writes nothing and says why: duplicates name the existing id, re
             return;
           }
           default:
-            notify("Usage: /atlas status | on | off | organize [note] | search <words> | export <file> | import <file>", "warning");
+            notify("Usage: /atlas status | on | off | organize [note] | guide <书名> | search <words> | export <file> | import <file>", "warning");
         }
       } catch (error) {
         notify(`Atlas: ${(error as Error).message}`, "error");
