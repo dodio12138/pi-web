@@ -132,7 +132,12 @@ export interface OpenReport {
 
 // ---------------------------------------------------------------------------
 
-const stores = new Map<string, AtlasStore>();
+// One store per library folder per process, even when this module is loaded
+// more than once: pi loads extensions through its own module loader, and the
+// pi-web routes import the same code through their bundle. Both must share the
+// writer, or the second would find the folder locked by its own process.
+const STORES_KEY = Symbol.for("pi-book-atlas.stores");
+const stores: Map<string, AtlasStore> = ((globalThis as Record<symbol, unknown>)[STORES_KEY] ??= new Map()) as Map<string, AtlasStore>;
 
 export class AtlasStore {
   readonly storage: AtlasStorage;

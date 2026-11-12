@@ -262,3 +262,12 @@ test("one process shares one store per folder; another live process is refused, 
   assert.ok(taken);
 });
 
+
+test("two copies of the module in one process share one store per folder", async (t) => {
+  const { store, root } = scratchAtlas(t);
+  const { createJiti } = await import("jiti");
+  const fresh = createJiti(import.meta.url, { interopDefault: true, moduleCache: false });
+  const copy = await fresh.import("../src/core/store.ts");
+  assert.notEqual(copy.AtlasStore, core.AtlasStore, "a separate module instance");
+  assert.equal(copy.openAtlas(root).store, store);
+});

@@ -135,8 +135,10 @@ export function search(store: AtlasStore, query: string, options: SearchOptions 
     bookScope = new Set([options.book_id]);
     for (const relation of store.relationsOf(options.book_id)) bookScope.add(relation.from_id === options.book_id ? relation.to_id : relation.from_id);
   }
-  // A query that names a tag finds what is bound to it, ranked by coverage.
-  const namedTags = wanted ? findTagsByLabel(store.tags, query) : [];
+  // A query that names a tag finds what is bound to it, ranked by coverage:
+  // by its exact name, or by mentioning it in a sentence ("自然法讲了什么").
+  const namedTags = wanted ? [...new Map([...findTagsByLabel(store.tags, query), ...[...store.tags.values()].filter((tag) => tag.status === "active"
+    && [tag.name, ...tag.aliases].some((label) => normalizeLabel(label).length >= 2 && wanted.includes(normalizeLabel(label))))].map((tag) => [tag.id, tag])).values()] : [];
 
   const hits = new Map<string, SearchHit>();
   for (const entry of entriesOf(store)) {
@@ -157,6 +159,11 @@ export function search(store: AtlasStore, query: string, options: SearchOptions 
         const isTitle = normalizeLabel(entry.title) === wanted;
         score += isTitle ? 300 : 250;
         reasons.push(isTitle ? "title" : `alias: ${label}`);
+      } else {
+        // Questions are sentences: "自然状态是什么" names the node 自然状态.
+        const mentioned = entry.labels.filter((l) => normalizeLabel(l).length >= 2 && wanted.includes(normalizeLabel(l)))
+          .sort((a, b) => b.length - a.length)[0];
+        if (mentioned) { score += 200; reasons.push(`mentions: ${mentioned}`); }
       }
       for (const tag of namedTags) {
         const rank = entry.coverage.get(tag.id);

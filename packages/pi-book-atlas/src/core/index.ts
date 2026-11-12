@@ -10,3 +10,5 @@ export { AtlasStore, openAtlas, type Operation, type PatchConflict, type PatchRe
 export { findTagsByLabel, normalizeLabel, resolveTag } from "./tags";
 export { search, tokenize, type SearchHit, type SearchOptions } from "./search";
 export { BACKUP_FORMAT, exportBackup, importBackup, type AtlasBackup, type ImportReport } from "./backup";
+export { ConversationLog, textHash, type CapturedMessage, type OrganizedMark } from "./conversations";
+export { buildContext, describe, type ContextPack, type ContextRequest, type ObjectView } from "./context";

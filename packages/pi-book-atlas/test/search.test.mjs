@@ -103,3 +103,14 @@ test("the index follows commits without a manual rebuild", (t) => {
   assert.equal(core.search(store, "利维坦")[0].id, ids.$lev);
   assert.ok(core.search(store, "利维坦")[0].reasons.includes("title contains"));
 });
+
+test("a question asked as a sentence finds the titles and tags it mentions", (t) => {
+  const { store } = scratchAtlas(t);
+  const ids = library(store);
+  const [node] = core.search(store, "自然状态到底是什么意思？", { kinds: ["node"] });
+  assert.equal(node.id, ids.$state);
+  assert.ok(node.reasons.includes("mentions: 自然状态"), JSON.stringify(node));
+  const books = core.search(store, "控制理论里有哪些经典？", { kinds: ["book"] });
+  assert.equal(books[0]?.id, ids.$cyb);
+  assert.ok(books[0].reasons.includes("tag: 控制理论 (core)"));
+});

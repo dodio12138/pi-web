@@ -3,17 +3,30 @@
   "version": "0.1.0",
   "private": true,
   "description": "Books, tags and a knowledge graph built up from conversations with pi (Pi Book Atlas).",
+  "keywords": [
+    "pi-package"
+  ],
   "type": "module",
   "license": "MIT",
   "main": "src/core/index.ts",
   "exports": {
-    "./core": "./src/core/index.ts"
+    "./core": "./src/core/index.ts",
+    "./extension": "./src/extension/index.ts"
+  },
+  "pi": {
+    "extensions": [
+      "./src/extension/index.ts"
+    ]
   },
   "scripts": {
     "test": "node --test \"test/**/*.test.mjs\""
   },
   "dependencies": {
     "js-yaml": "^5.2.3"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
   },
   "engines": {
     "node": ">=22.19.0"
