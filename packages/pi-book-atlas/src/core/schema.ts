@@ -408,6 +408,8 @@ const VALIDATORS: Record<ObjectKind, (obj: Record<string, unknown>, problems: Pr
     oneOf(obj, "kind", SOURCE_KINDS, problems);
     str(obj, "title", problems);
     str(obj, "url", problems, { optional: true });
+    // A web source is only as good as the page it points at.
+    if (obj.kind === "web" && (typeof obj.url !== "string" || !/^https?:\/\//i.test(obj.url))) problems.push({ path: "url", message: "a web source needs the page's http(s) address" });
     oneOf(obj, "granularity", GRANULARITY, problems);
     oneOf(obj, "verification", VERIFICATION, problems);
     if (obj.locator !== undefined && !isRecord(obj.locator)) problems.push({ path: "locator", message: "must be an object" });

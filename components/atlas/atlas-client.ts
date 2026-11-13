@@ -50,7 +50,17 @@ export interface GraphCard {
   verification: string; attribution: string | null; subtitle: string; revision: number; updated_at: string; more: number;
   /** In a book's view with a table of contents: the chapter it comes from (null: a supplement) and the exact entry. */
   chapter?: string | null; place?: string | null;
+  evidence?: "text" | "sources" | "note" | "inferred" | null;
+  sources?: { title: string; kind: string; url: string | null; verification: string }[];
 }
+/** What backs a card, as its badge says it. */
+export const EVIDENCE_LABEL: Record<string, string> = { text: "原文", sources: "有出处", note: "我的", inferred: "推断" };
+export const EVIDENCE_HINT: Record<string, string> = {
+  text: "有书中原文作依据",
+  sources: "有网页、研究或书目资料作依据",
+  note: "你自己的笔记或理解",
+  inferred: "只有 AI 的推断或对话，没有可查的出处",
+};
 export interface GraphSpine {
   book_id: string; source: string; note: string | null;
   columns: { id: string | null; title: string | null; chapters: { id: string; title: string; sections: { id: string; title: string }[] }[] }[];

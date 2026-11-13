@@ -100,3 +100,27 @@ test("layout: hand-placed positions and per-view hidden cards persist apart from
   assert.ok(readdirSync(root).some((f) => f.startsWith("layout.json.broken-")), "a broken layout is kept aside");
   assert.ok(!existsSync(join(root, core.LAYOUT_FILE)));
 });
+
+test("each card says what backs it: the text, outside sources, a note, or only inference", (t) => {
+  const { store } = scratchAtlas(t);
+  const made = store.applyPatch(patch([
+    { op: "create_source", ref: "$text", fields: { kind: "book_text", title: "利维坦 第13章", granularity: "chapter", locator: { chapter: "13" } } },
+    { op: "create_source", ref: "$sep", fields: { kind: "web", title: "SEP: Hobbes's Moral and Political Philosophy", url: "https://plato.stanford.edu/entries/hobbes-moral/", granularity: "work", verification: "partial" } },
+    { op: "create_source", ref: "$talk", fields: { kind: "conversation", title: "对话", granularity: "message", locator: { session_id: "s", message_id: "m" } } },
+    { op: "create_book", ref: "$b", fields: { title: "利维坦" } },
+    { op: "create_node", ref: "$t", fields: { type: "claim", title: "原文", attribution: "author_claim", source_refs: ["$text", "$talk"] } },
+    { op: "create_node", ref: "$w", fields: { type: "claim", title: "百科", attribution: "later_interpretation", source_refs: ["$sep"] } },
+    { op: "create_node", ref: "$m", fields: { type: "question", title: "我的问题", attribution: "user_understanding" } },
+    { op: "create_node", ref: "$i", fields: { type: "concept", title: "推断", attribution: "ai_synthesis", source_refs: ["$talk"] } },
+    ...["$t", "$w", "$m", "$i"].map((n) => ({ op: "create_relation", fields: { from_id: "$b", to_id: n, type: "expounds", attribution: "ai_synthesis" } })),
+  ]));
+  assert.equal(made.ok, true, JSON.stringify(made));
+  const graph = core.buildGraph(store, { view: "book", book_id: made.created.$b });
+  const card = (ref) => graph.cards.find((c) => c.id === made.created[ref]);
+  assert.deepEqual(["$t", "$w", "$m", "$i"].map((r) => card(r).evidence), ["text", "sources", "note", "inferred"]);
+  assert.deepEqual(card("$w").sources, [{ title: "SEP: Hobbes's Moral and Political Philosophy", kind: "web", url: "https://plato.stanford.edu/entries/hobbes-moral/", verification: "partial" }]);
+  assert.deepEqual(card("$t").sources.map((s) => s.kind), ["book_text"], "conversations are not listed");
+
+  const noUrl = store.applyPatch(patch([{ op: "create_source", fields: { kind: "web", title: "某网页", granularity: "work" } }]));
+  assert.equal(noUrl.ok, false, "a web source needs its address");
+});

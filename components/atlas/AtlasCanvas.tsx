@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { CARD_H, CARD_W, type Point, type StructureFrames } from "./atlas-layout";
-import { ATTRIBUTION_LABEL, canonicalRelation, isSymmetricRelation, NODE_TYPE_LABEL, relationLabel, VERIFICATION_LABEL, type GraphCard, type GraphEdge } from "./atlas-client";
+import { ATTRIBUTION_LABEL, EVIDENCE_HINT, EVIDENCE_LABEL, canonicalRelation, isSymmetricRelation, NODE_TYPE_LABEL, relationLabel, VERIFICATION_LABEL, type GraphCard, type GraphEdge } from "./atlas-client";
 
 // The node canvas: cards are HTML over an SVG layer of edges, all inside one
 // transformed plane. Drag the background to pan, the wheel to zoom, a card to
@@ -312,8 +312,8 @@ export function AtlasCanvas({ cards, edges: allEdges, positions, selected, fresh
             >
               <div className="atlas-card-head">
                 <span className="atlas-card-type">{NODE_TYPE_LABEL[card.type] ?? card.type}</span>
-                {card.kind === "node" && card.verification !== "verified" && (
-                  <span className="atlas-card-state" title={VERIFICATION_LABEL[card.verification]}>{VERIFICATION_LABEL[card.verification] ?? card.verification}</span>
+                {card.kind === "node" && card.evidence && (
+                  <span className={`atlas-evidence atlas-evidence-${card.evidence}`} title={EVIDENCE_HINT[card.evidence]}>{EVIDENCE_LABEL[card.evidence]}</span>
                 )}
                 {card.more > 0 && (
                   <button type="button" className="atlas-card-more" title={`展开 ${card.more} 个相邻节点`} onClick={() => onExpand(card.id)}>+{card.more}</button>
@@ -349,6 +349,15 @@ export function AtlasCanvas({ cards, edges: allEdges, positions, selected, fresh
           <div className="atlas-peek-title">{peekCard.title}</div>
           {peekCard.subtitle && <div className="atlas-card-sub">{peekCard.subtitle}</div>}
           {peekCard.summary && <p className="atlas-peek-summary">{peekCard.summary}</p>}
+          {peekCard.kind === "node" && peekCard.evidence && (
+            <div className={`atlas-peek-evidence atlas-evidence-${peekCard.evidence}`}>{EVIDENCE_HINT[peekCard.evidence]}</div>
+          )}
+          {(peekCard.sources ?? []).map((src, i) => (
+            <div key={i} className="atlas-peek-source">
+              {src.kind === "book_text" ? "原文" : src.kind === "web" ? "网页" : src.kind === "research" ? "研究" : src.kind === "bibliographic" ? "书目" : "笔记"}：{src.title}
+              {src.url && <span className="atlas-dim"> · {(() => { try { return new URL(src.url).hostname; } catch { return src.url; } })()}</span>}
+            </div>
+          ))}
           {peekCard.tags.length > 0 && <div className="atlas-peek-tags">{peekCard.tags.map((t) => <span key={t} className="atlas-chip">{t}</span>)}</div>}
           <div className="atlas-dim">
             {degree(peekCard.id)} 条关系{peekCard.more > 0 ? `，还有 ${peekCard.more} 个相邻节点未展开` : ""} · 点击看全文

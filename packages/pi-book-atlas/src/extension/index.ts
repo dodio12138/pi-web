@@ -68,7 +68,8 @@ const GUIDANCE = `This is a learning session connected to the user's book and kn
 - Reuse existing tags (search first; a duplicate name or alias is refused with the existing id). Mark coverage honestly: core, discussed or mentioned.
 - A book's knowledge has a place: its table of contents (the card's outline) is the spine of the book's graph. When knowledge comes from a part of the book, give the relation from the book to it (expounds, criticizes or mentions) a scope that is the outline entry's id (a section's id when known, else the chapter's). Background, comparisons with other books and reading advice get no scope: they show around the book as supplements. Never invent outline entries.
 - Relations are few; pick the one that fits: supports (A is grounds for B), refutes (A argues against B; for "true only under conditions" also refutes, with note "限定：…"), answers (a claim or view answering a question node), explains (A explains B, including definitions, examples and applications), requires (understanding A needs B first), develops (A builds on B: a thinker's or idea's lineage), related_to (only when none of these holds, comparisons included). A challenge to a view is a new refutes relation, not an overwrite.
-- Attribution and evidence: your own explanations are ai_synthesis with verification pending; author_claim only with a source that shows it. Never invent quotations, page numbers or chapter locations: without the text, give a paraphrase and mark it unverified.
+- Evidence before inference. The user wants what can be checked, not interpretation. For what a book or author says, look in this order: (1) text the user gave; (2) reliable sources you can open, if you have web search, fetch or a shell (publisher and library pages, encyclopedias such as the Stanford Encyclopedia of Philosophy, scholarly reviews and articles, Wikipedia as a lead): read the page, then record it with create_source {kind: "web", title, url, granularity: "work" (or chapter/section with a locator), verification: "partial"} and cite it; (3) only then your own reading: say plainly in the answer that it is an inference, keep it to a sentence or two, and do not build further claims on it. If you cannot check something, say so and ask the user for the passage instead of filling the gap. Prefer concrete, checkable examples (a dated event, a named text, a documented case) with their source over general paraphrase.
+- Attribution: what a source shows is author_claim (the author's text), quoted, or later_interpretation (a scholar's reading), with that source cited; your own explanations are ai_synthesis with verification pending. verified only after matching the book's own text. Never invent quotations, page numbers, chapter locations or URLs.
 - The library's files (books/, nodes/, *.json, conversations/) change only through atlas_apply_patch: never write, move or delete them with file tools, even when this session runs in the library folder.
 - Cite this conversation with the source ref "$conversation" (created for you). Pass the message ids the knowledge came from as source_message_ids.
 
@@ -296,7 +297,7 @@ create_book {ref?, fields:{title, authors?, published_year? (first publication, 
 create_node {ref?, fields:{type: concept|claim|method|skill|question|example, title, summary?, aliases?, body?, attribution, tag_bindings?, source_refs?}} · update_node {id, changes}
 create_tag {ref?, fields:{type: domain|topic|question|method, name, definition?, aliases?, parent_ids?}} · update_tag {id, changes} · merge_tags {from_ids, into_id}
 create_relation {ref?, fields:{from_id, to_id, type, attribution, scope? (from a book: the outline entry id it comes from), note?, source_refs?}} · update_relation {id, changes}
-create_source {ref?, fields:{kind, title, url?, granularity, locator?}} · bind_tag {target_id, binding:{tag_id, coverage: core|discussed|mentioned, assigned_by: human|source_checked|ai_inference, reason?}} · unbind_tag {target_id, tag_id} · archive {id} · restore {id}
+create_source {ref?, fields:{kind: book_text|web|research|bibliographic|user_note|model_explanation, title, url? (required for web), granularity: none|work|chapter|section|page, locator?: {chapter?, section?, page?}, verification?}} · bind_tag {target_id, binding:{tag_id, coverage: core|discussed|mentioned, assigned_by: human|source_checked|ai_inference, reason?}} · unbind_tag {target_id, tag_id} · archive {id} · restore {id}
 Name new objects with ref "$name" and refer to them as "$name" later in the same patch. "$conversation" is a source for this conversation, created when used.
 Relation types: supports refutes answers explains requires develops related_to; from a book to knowledge: expounds criticizes mentions (studied_in is added for you). Older types (defines, qualifies, exemplifies, compares, applies_to, introduces, adopts) are refused: use the type they fold into.
 Attribution: author_claim quoted later_interpretation ai_synthesis user_understanding game_setting. Verification: pending partial verified.
@@ -409,7 +410,7 @@ A refused patch writes nothing and says why: duplicates name the existing id, re
               "",
               "先用 atlas_get_context / atlas_search 查找已有的书籍、节点和标签，再用一个 atlas_apply_patch 提交：补充已有节点，必要时新建节点、标签和关系，来源引用 \"$conversation\"。",
               `调用时 source_message_ids 设为 ${JSON.stringify(ids)}，idempotency_key 设为 "organize:${sessionId}:${ids.at(-1)}"。`,
-              "纯确认或闲聊不建节点；不要编造原文引文、页码或章节。完成后用一两句话告诉我新增和修改了什么。",
+              "纯确认或闲聊不建节点；不要编造原文引文、页码或章节。有出处的（我给的原文、你查到的网页）附上来源；只是推断的少写，并标为推断。完成后用一两句话告诉我新增和修改了什么，各有什么依据。",
               ...(arg ? [`补充说明：${arg}`] : []),
             ].join("\n"));
             return;
@@ -455,7 +456,7 @@ A refused patch writes nothing and says why: duplicates name the existing id, re
               "- 「核心问题」里的问题同时写进 entry_questions；值得单独讨论的写成 question 节点并用关系连到书。",
               "- 新建的知识节点，用书到节点的关系（expounds 等）连上，scope 写它出自的目录条目 id；只是背景或补充的不写 scope。",
               `- 分类：classification 设为 {scheme_id:"clc", scheme_version:"5", codes:[主类, …]}，一个中图法二级主类在前，跨领域的书最多再加两个；另外用 ${BOOK_CORE_TAGS.min}–${BOOK_CORE_TAGS.max} 个 core 标签补充类目说不清的主题、问题或方法（先查已有标签再新建，用词要准、短）。已有分类和标签就核对，不合适的改掉、解绑。`,
-              "- 归属用 ai_synthesis、核验状态 pending，来源引用 \"$conversation\"；这是你的概括，不是作者原话。",
+              "- 透镜的回答尽量有依据：能联网就查出版社、书评、百科或研究文章，记成 web 来源（网址、标题）并引用；查到的用 later_interpretation，自己的概括用 ai_synthesis，并在回答里说明哪些是推断。来源都引用 \"$conversation\" 加上查到的网页。",
               "不要编造原文引文、页码或章节；对这本书了解不够就直说，留给我们之后一起读。最后问我想从哪个透镜深入。",
             ].join("\n"));
             return;

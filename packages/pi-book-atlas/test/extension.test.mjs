@@ -204,7 +204,8 @@ test("the prompt carries the Atlas rules and likely matches in learning sessions
   const on = event("自然状态是什么");
   await host.emit("before_agent_start", on);
   const section = on.systemPromptOptions.sections["pi-book-atlas"];
-  assert.match(section, /Never invent quotations, page numbers or chapter locations/);
+  assert.match(section, /Never invent quotations, page numbers, chapter locations or URLs/);
+  assert.match(section, /Evidence before inference[\s\S]*create_source \{kind: "web"[\s\S]*say plainly in the answer that it is an inference/);
   assert.match(section, /Possibly relevant in the library[\s\S]*自然状态 \(node-/);
   const unrelated = event("今天天气不错");
   await host.emit("before_agent_start", unrelated);

@@ -44,6 +44,14 @@ export interface GraphCard {
   updated_at: string;
   /** Neighbours not on the canvas: something to expand. */
   more: number;
+  /**
+   * What backs a node, strongest first: the book's own text, outside material
+   * (web pages, research, bibliographic records), the user's own note or
+   * understanding, else only inference (the model's explanation, a conversation).
+   */
+  evidence?: "text" | "sources" | "note" | "inferred" | null;
+  /** Up to three of its non-conversation sources, for the hover card. */
+  sources?: { title: string; kind: string; url: string | null; verification: string }[];
   /** In a book's view: the chapter of its table of contents this knowledge comes from, and the exact entry. Null: a supplement. */
   chapter?: string | null;
   place?: string | null;
@@ -185,6 +193,7 @@ export function buildGraph(store: AtlasStore, request: GraphRequest): Graph {
       revision: obj.revision,
       updated_at: obj.updated_at,
       more: neighbours(obj.id).filter((other) => !onCanvas.has(other)).length,
+      ...(isBook ? {} : evidenceOf(store, node)),
     };
   });
 
@@ -203,6 +212,24 @@ export function buildGraph(store: AtlasStore, request: GraphRequest): Graph {
   }
 
   return { key: graphKey(request), outline, cards, edges, truncated, revision: store.meta.workspace_revision };
+}
+
+const OUTSIDE = new Set(["web", "research", "bibliographic"]);
+
+function evidenceOf(store: AtlasStore, node: KnowledgeNode): Pick<GraphCard, "evidence" | "sources"> {
+  const refs = new Set(node.source_refs);
+  for (const b of node.tag_bindings) for (const ref of b.source_refs) refs.add(ref);
+  const sources = [...refs].map((ref) => store.sources.get(ref)).filter((src): src is NonNullable<typeof src> => Boolean(src));
+  const kinds = new Set(sources.map((src) => src.kind));
+  const evidence = kinds.has("book_text") ? "text"
+    : [...kinds].some((k) => OUTSIDE.has(k)) ? "sources"
+    : kinds.has("user_note") || node.attribution === "user_understanding" ? "note"
+    : "inferred";
+  const shown = sources.filter((src) => src.kind !== "conversation")
+    .sort((a, b) => Number(b.kind === "book_text") - Number(a.kind === "book_text"))
+    .slice(0, 3)
+    .map((src) => ({ title: src.title, kind: src.kind, url: src.url ?? null, verification: src.verification }));
+  return { evidence, sources: shown };
 }
 
 /** The books, for the books bar: title, authors, main class, core tags, how much knowledge. */

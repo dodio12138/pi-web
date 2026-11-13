@@ -175,3 +175,15 @@ a.atlas-btn { text-decoration: none; }
 .atlas-outer > span { position: absolute; top: 10px; left: 14px; font-size: 11px; color: var(--text-dim); }
 .atlas-card.is-outer { border-style: dashed; border-top-style: solid; }
 .atlas-spine-bar { position: absolute; top: 32px; left: 10px; z-index: 2; display: flex; align-items: center; gap: 8px; font-size: 11px; background: color-mix(in srgb, var(--bg) 85%, transparent); padding: 2px 4px; border-radius: 4px; }
+
+/* What backs a card: the text and outside sources stand out, inference stays quiet */
+.atlas-evidence { font-size: 9.5px; padding: 0 4px; border-radius: 3px; border: 1px solid currentColor; line-height: 14px; }
+.atlas-evidence-text { color: var(--ansi-green, #3a3); }
+.atlas-evidence-sources { color: var(--ansi-blue, #48c); }
+.atlas-evidence-note { color: var(--ansi-magenta, #a5a); }
+.atlas-evidence-inferred { color: var(--text-dim); border-style: dashed; }
+.atlas-peek-evidence { font-size: 11px; }
+.atlas-peek-evidence.atlas-evidence-text { color: var(--ansi-green, #3a3); }
+.atlas-peek-evidence.atlas-evidence-sources { color: var(--ansi-blue, #48c); }
+.atlas-peek-evidence.atlas-evidence-inferred { color: var(--text-dim); }
+.atlas-peek-source { font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
