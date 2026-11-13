@@ -39,6 +39,7 @@ import { McpConfig } from "./McpConfig";
 import { ConfigButton, ConfigDetailNavigationContext, ConfigSwitch, type ConfigDetailNavigation } from "./SettingsUi";
 import { FontSettings } from "./FontSettings";
 import { WorkspaceSettings } from "./WorkspaceSettings";
+import { AtlasSettings } from "./atlas/AtlasSettings";
 
 interface Props {
   cwd: string | null;
@@ -411,6 +412,8 @@ function GeneralSettings({ sessionId, onSessionReloaded, quoteSelectionEnabled, 
       </section>
 
       <WorkspaceSettings />
+
+      <AtlasSettings />
 
       <section className="settings-general-section">
         <h3 className="settings-general-heading">{t("settings.sidebar")}</h3>

@@ -29,6 +29,8 @@ interface Props {
   /** Cards on the canvas, to pick a relation target from. */
   cards: GraphCard[];
   onAsk: (action: string) => void;
+  /** For a book: walk it through the reading lenses in the chat (/atlas guide). */
+  onGuide?: (title: string) => void;
   onSelect: (id: string) => void;
   onHide: (id: string) => void;
   onChanged: () => void;
@@ -66,7 +68,7 @@ function draftOf(view: ObjectView): Draft {
 
 const split = (s: string) => s.split(/[、,，;；\n]/).map((x) => x.trim()).filter(Boolean);
 
-export function AtlasDetail({ id, tags, cards, onAsk, onSelect, onHide, onChanged, onOpenSession, onClose }: Props) {
+export function AtlasDetail({ id, tags, cards, onAsk, onGuide, onSelect, onHide, onChanged, onOpenSession, onClose }: Props) {
   const [view, setView] = useState<ObjectView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -237,6 +239,9 @@ export function AtlasDetail({ id, tags, cards, onAsk, onSelect, onHide, onChange
             o.summary ? <p className="atlas-detail-summary">{String(o.summary)}</p> : null
           )}
           <div className="atlas-row atlas-wrap">
+            {isBook && onGuide && (
+              <button type="button" className="atlas-btn atlas-btn-primary" onClick={() => onGuide(String(o.title ?? ""))} title="让 Agent 用八个读书透镜带你过一遍这本书，并整理书卡、分类和标签">读书透镜引导</button>
+            )}
             {ACTIONS.map((action) => (
               <button key={action} type="button" className="atlas-btn" onClick={() => onAsk(action)} title={`把这张卡片带进对话：${action}`}>{action}</button>
             ))}

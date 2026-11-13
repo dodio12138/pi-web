@@ -1465,6 +1465,9 @@ export function AppShell() {
     if (isMobile) setSidebarOpen(false);
   }, [activeFileTabId, atlasOpen, handleCloseFileTab, isMobile, rightPanelOpen]);
 
+  // Commands such as /atlas on go straight to the chat; false while a reply streams.
+  const handleAtlasSend = useCallback((text: string) => chatInputRef.current?.sendText(text) ?? false, []);
+
   // A full-width panel hides the chat: step back so the inserted question is in view.
   const handleAtlasInsert = useCallback((text: string) => {
     setRightPanelExpanded(false);
@@ -3104,6 +3107,7 @@ export function AppShell() {
                 active={rightPanelOpen && activeFileTabId === ATLAS_TAB_ID}
                 sessionId={selectedSession?.id ?? null}
                 onInsert={handleAtlasInsert}
+                onSend={handleAtlasSend}
                 onOpenSession={(sessionId) => {
                   const session = sessionCatalog.find((item) => item.id === sessionId);
                   if (session) handleSelectSession(session);

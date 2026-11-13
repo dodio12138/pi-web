@@ -118,6 +118,8 @@ export interface ChatInputHandle {
   /** Insert at the caret as a paragraph of its own: a blockquote must start a line. */
   insertQuote: (text: string) => void;
   insertIfEmpty: (text: string) => void;
+  /** Sends a message as typed, leaving the draft alone; false while a reply is streaming. */
+  sendText: (text: string) => boolean;
   replaceMessage: (message: UserMessage) => void;
   prependText: (text: string) => void;
   addImages: (files: File[]) => void;
@@ -774,6 +776,12 @@ export const ChatInput = memo(forwardRef<ChatInputHandle, Props>(function ChatIn
   attachedImagesRef.current = attachedImages;
 
   useImperativeHandle(ref, () => ({
+    sendText(text: string) {
+      if (isStreaming || !text.trim()) return false;
+      onAudioUnlock?.();
+      onSend(text.trim());
+      return true;
+    },
     insertIfEmpty(text: string) {
       const ta = textareaRef.current;
       const current = ta ? ta.value : value;

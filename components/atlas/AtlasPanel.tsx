@@ -5,6 +5,7 @@ import { AtlasCanvas } from "./AtlasCanvas";
 import { AtlasDetail } from "./AtlasDetail";
 import { placeCards, type Point } from "./atlas-layout";
 import { askText, atlasApi, type AtlasGraph, type AtlasOverview, type GraphView } from "./atlas-client";
+import { fetchAtlasSettings, saveAtlasSettings, type AtlasSettingsState } from "./AtlasSettings";
 import "./atlas.css";
 
 // The knowledge graph tab (Pi Book Atlas, P3). Books and tags on the left,
@@ -17,6 +18,8 @@ interface Props {
   active: boolean;
   sessionId: string | null;
   onInsert: (text: string) => void;
+  /** Sends a command to the current chat; false when it cannot right now. */
+  onSend: (text: string) => boolean;
   onOpenSession?: (sessionId: string) => void;
 }
 
@@ -29,7 +32,7 @@ const VIEWS: { key: GraphView; label: string }[] = [
 
 const PREFS_KEY = "pi-atlas-panel";
 
-export function AtlasPanel({ active, sessionId, onInsert, onOpenSession }: Props) {
+export function AtlasPanel({ active, sessionId, onInsert, onSend, onOpenSession }: Props) {
   const [overview, setOverview] = useState<AtlasOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<GraphView>("book");
@@ -51,6 +54,9 @@ export function AtlasPanel({ active, sessionId, onInsert, onOpenSession }: Props
   const sidebarVisible = narrow ? booksOverlay : showBooks;
   const [status, setStatus] = useState<string>("");
   const [packOpen, setPackOpen] = useState(false);
+  // The extension's switch and whether this session learns (null: no session yet).
+  const [setup, setSetup] = useState<AtlasSettingsState | null>(null);
+  const [enabling, setEnabling] = useState(false);
   const [packUntil, setPackUntil] = useState("");
   const [packNotes, setPackNotes] = useState(false);
   const seenRef = useRef<{ revision: number; cards: Map<string, number> } | null>(null);
@@ -114,6 +120,8 @@ export function AtlasPanel({ active, sessionId, onInsert, onOpenSession }: Props
     }
   }, [graphQuery, ready]);
 
+  const loadSetup = useCallback(async () => setSetup(await fetchAtlasSettings(sessionId)), [sessionId]);
+  useEffect(() => { if (active) void loadSetup(); }, [active, loadSetup]);
   useEffect(() => { if (active) void loadOverview(); }, [active, loadOverview]);
   // A different view starts fresh: nothing glows, expansions reset.
   useEffect(() => { seenRef.current = null; setFresh(new Set()); setSelected([]); }, [view, bookId, sessionId, submitted]);
@@ -203,6 +211,34 @@ export function AtlasPanel({ active, sessionId, onInsert, onOpenSession }: Props
   };
   const packYearOk = !packUntil.trim() || /^-?\d+$/.test(packUntil.trim());
 
+  const send = (text: string, done?: string) => {
+    if (!onSend(text)) { setStatus("正在回复，等这一轮结束再试"); return false; }
+    if (done) setStatus(done);
+    return true;
+  };
+
+  // The session's mode is a session entry the command writes: read it back once it has run.
+  const toggleLearning = () => {
+    const on = !setup?.learning;
+    if (send(on ? "/atlas on" : "/atlas off", on ? "已开启学习模式" : "已关闭学习模式")) {
+      window.setTimeout(() => void loadSetup(), 1200);
+      window.setTimeout(() => void loadSetup(), 4000);
+    }
+  };
+
+  const enableAtlas = async () => {
+    setEnabling(true);
+    try {
+      setSetup(await saveAtlasSettings({ installed: true }));
+      setStatus("已启用：新建的会话会加载书籍知识库");
+      void loadOverview();
+    } catch (e) {
+      setStatus((e as Error).message);
+    } finally {
+      setEnabling(false);
+    }
+  };
+
   const createLibrary = async () => {
     await atlasApi.post({ op: "create" });
     void loadOverview();
@@ -227,13 +263,29 @@ export function AtlasPanel({ active, sessionId, onInsert, onOpenSession }: Props
 
   if (error && !overview) return <div className="atlas-empty">知识库读取失败：{error}</div>;
   if (!overview) return <div className="atlas-empty atlas-dim">载入中…</div>;
+  if (setup && !setup.installed) {
+    return (
+      <div className="atlas-empty">
+        <p>书籍知识库还没有启用。</p>
+        <p className="atlas-dim">启用后，会话里可以开启学习模式：讨论会被记录，整理成书、知识节点和标签，显示在这里。</p>
+        <button type="button" className="atlas-btn atlas-btn-primary" disabled={enabling} onClick={() => void enableAtlas()}>{enabling ? "启用中…" : "启用书籍知识库"}</button>
+        <p className="atlas-dim">知识库目录：<span className="atlas-mono">{setup.root}</span>（可在设置 › 常规里修改）</p>
+        {status && <p className="atlas-status">{status}</p>}
+      </div>
+    );
+  }
   if (!overview.exists) {
     return (
       <div className="atlas-empty">
         <p>还没有知识库。</p>
         <p className="atlas-dim atlas-mono">{overview.root}</p>
-        <p className="atlas-dim">在对话里输入 <code>/atlas on</code> 开启学习会话，或者直接在这里创建。</p>
-        <button type="button" className="atlas-btn atlas-btn-primary" onClick={() => void createLibrary()}>创建知识库</button>
+        <p className="atlas-dim">在会话里开启学习模式后，第一次整理时会自动创建；也可以现在就创建。</p>
+        <div className="atlas-row" style={{ justifyContent: "center" }}>
+          {sessionId && !setup?.learning && <button type="button" className="atlas-btn atlas-btn-primary" onClick={toggleLearning}>在本会话开启学习模式</button>}
+          <button type="button" className="atlas-btn" onClick={() => void createLibrary()}>创建知识库</button>
+        </div>
+        {setup?.installed && <p className="atlas-dim">扩展已启用。如果本会话是启用之前打开的，需要重新打开会话才会加载。</p>}
+        {status && <p className="atlas-status">{status}</p>}
       </div>
     );
   }
@@ -255,7 +307,22 @@ export function AtlasPanel({ active, sessionId, onInsert, onOpenSession }: Props
         <span style={{ flex: 1 }} />
         {status && <span className="atlas-status">{status}</span>}
         <button type="button" className="atlas-btn" onClick={() => void newNode()} title="新建一个知识点">+ 节点</button>
-        <button type="button" className="atlas-btn" onClick={() => onInsert("/atlas organize")} title="把本次讨论整理进知识库">整理本次讨论</button>
+        {sessionId && setup?.installed && (
+          <button
+            type="button"
+            className={`atlas-btn${setup.learning ? " is-on" : ""}`}
+            onClick={toggleLearning}
+            aria-pressed={Boolean(setup.learning)}
+            title={setup.learning ? "本会话在学习模式：消息会被记录，可以整理进知识库。点击关闭" : "开启后，本会话的消息会被记录，可以整理进知识库"}
+          >{setup.learning ? "● 学习模式" : "开启学习模式"}</button>
+        )}
+        <button
+          type="button"
+          className="atlas-btn"
+          disabled={!sessionId || !setup?.learning}
+          onClick={() => send("/atlas organize", "已发送整理请求")}
+          title={!setup?.learning ? "先开启学习模式" : "让 Agent 把本次讨论整理进知识库"}
+        >整理本次讨论</button>
         <button type="button" className="atlas-btn" onClick={() => void rearrange()} title="重新排列这个视图里的所有卡片">重排</button>
         <span className="atlas-pop-anchor">
           <button type="button" className={`atlas-btn${packOpen ? " is-on" : ""}`} onClick={() => setPackOpen((v) => !v)} aria-expanded={packOpen} title="导出给其他应用或游戏用的资料包">导出资料包</button>
@@ -369,6 +436,7 @@ export function AtlasPanel({ active, sessionId, onInsert, onOpenSession }: Props
             tags={overview.tags ?? []}
             cards={graph?.cards ?? []}
             onAsk={ask}
+            onGuide={(title) => send(`/atlas guide ${title}`, "已发送读书引导")}
             onSelect={(id) => {
               if (graph && !graph.cards.some((c) => c.id === id)) setExpand((e) => [...e, id]);
               select([id]);

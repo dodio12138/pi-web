@@ -19,6 +19,7 @@ import {
 } from "@/packages/pi-book-atlas/src/core/index";
 import { resolveAtlasRoot, type AtlasSettings } from "@/packages/pi-book-atlas/src/root";
 import { getGlobalSettingsPath } from "@/lib/global-settings-file";
+import { readAtlasSettings, sessionLearning, updateAtlasSettings, type AtlasSettingsChange } from "@/lib/atlas-settings";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
 
 // The knowledge graph panel's backend (Pi Book Atlas, fork only). It goes
@@ -61,6 +62,13 @@ export async function GET(req: Request) {
   const params = new URL(req.url).searchParams;
   const op = params.get("op") ?? "overview";
   try {
+    if (op === "settings") {
+      // The extension's switch and folder, and whether this session learns.
+      const view = await readAtlasSettings();
+      const sessionId = params.get("session_id");
+      const learning = sessionId && view.installed ? await sessionLearning(sessionId, view.autoEnable) : null;
+      return NextResponse.json({ ...view, learning }, { headers: NO_STORE });
+    }
     const { root, store } = library();
     if (!store) return NextResponse.json({ root, exists: false }, { headers: NO_STORE });
     switch (op) {
@@ -124,9 +132,21 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   if (!isApiRequestAllowed(req)) return NextResponse.json({ error: "Untrusted API request" }, { status: 403, headers: NO_STORE });
   if (!hasJsonContentType(req)) return NextResponse.json({ error: "Content-Type must be application/json" }, { status: 415, headers: NO_STORE });
-  const body = await req.json().catch(() => null) as { op?: string; patch?: PatchRequest; change?: LayoutChange } | null;
+  const body = await req.json().catch(() => null) as { op?: string; patch?: PatchRequest; change?: LayoutChange; settings?: AtlasSettingsChange } | null;
   try {
     switch (body?.op) {
+      case "settings": {
+        const s = body.settings ?? {};
+        const change: AtlasSettingsChange = {};
+        if (typeof s.installed === "boolean") change.installed = s.installed;
+        if (typeof s.autoEnable === "boolean") change.autoEnable = s.autoEnable;
+        if (s.root === null || typeof s.root === "string") change.root = s.root;
+        try {
+          return NextResponse.json(await updateAtlasSettings(change), { headers: NO_STORE });
+        } catch (error) {
+          return NextResponse.json({ error: (error as Error).message }, { status: 400, headers: NO_STORE });
+        }
+      }
       case "create": {
         const { root, store } = library({ create: true });
         return NextResponse.json({ root, exists: true, revision: store!.meta.workspace_revision }, { headers: NO_STORE });
