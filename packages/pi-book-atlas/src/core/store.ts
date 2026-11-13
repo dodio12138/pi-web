@@ -3,7 +3,8 @@ import { existsSync, mkdirSync, realpathSync } from "node:fs";
 import { parseFrontMatter, serializeFrontMatter } from "./frontmatter";
 import { newId, nowIso } from "./ids";
 import {
-  BOOK_RELATIONS,
+  FROM_BOOK_RELATIONS,
+  LEGACY_RELATIONS,
   kindOfId,
   SCHEMA_VERSION,
   SYMMETRIC_RELATIONS,
@@ -637,6 +638,9 @@ class Draft {
       }
       case "create_relation": {
         const f = operation.fields;
+        // The trimmed set: old types stay readable but are not made anew.
+        const folded = (LEGACY_RELATIONS as Record<string, string>)[f.type];
+        if (folded) throw new PatchError(`"${f.type}" is no longer used: use "${folded}"${f.type === "qualifies" ? ' with a note "限定：…"' : ""}`, "fields.type");
         const relation: Relation = {
           ...base,
           id: f.id ?? newId("relation"),
@@ -656,9 +660,13 @@ class Draft {
         this.insert("relation", relation, operation.ref);
         return;
       }
-      case "update_relation":
+      case "update_relation": {
+        const type = (operation.changes as { type?: string }).type;
+        const folded = type ? (LEGACY_RELATIONS as Record<string, string>)[type] : undefined;
+        if (folded) throw new PatchError(`"${type}" is no longer used: use "${folded}"`, "changes.type", operation.id);
         this.update<Relation>(operation.id, operation.changes, now, warnings);
         return;
+      }
       case "create_source": {
         const f = operation.fields;
         const source: Source = {
@@ -771,7 +779,7 @@ class Draft {
           if (endKind !== "book" && endKind !== "node") add(id, end, "a relation joins books and nodes");
           else if (!mapFor(this, endKind).has(relation[end])) add(id, end, `unknown ${endKind} ${relation[end]}`);
         }
-        if ((BOOK_RELATIONS as readonly string[]).includes(relation.type) && kindOfId(relation.to_id) !== "node") add(id, "to_id", `${relation.type} points at a node`);
+        if ((FROM_BOOK_RELATIONS as readonly string[]).includes(relation.type) && kindOfId(relation.to_id) !== "node") add(id, "to_id", `${relation.type} points at a node`);
       }
     }
     return problems;

@@ -20,7 +20,7 @@ function library(store) {
     { op: "create_relation", fields: { from_id: "$loc", to_id: "$state", type: "expounds", attribution: "ai_synthesis" } },
     { op: "create_relation", fields: { from_id: "$lev", to_id: "$contract", type: "expounds", attribution: "ai_synthesis" } },
     { op: "create_relation", fields: { from_id: "$contract", to_id: "$right", type: "explains", attribution: "ai_synthesis" } },
-    { op: "create_relation", fields: { from_id: "$cyb", to_id: "$fb", type: "introduces", attribution: "ai_synthesis" } },
+    { op: "create_relation", fields: { from_id: "$cyb", to_id: "$fb", type: "expounds", attribution: "ai_synthesis" } },
   ]));
   assert.equal(result.ok, true, JSON.stringify(result));
   return result.created;

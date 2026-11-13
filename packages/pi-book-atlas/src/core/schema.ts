@@ -34,13 +34,40 @@ export type AssignedBy = (typeof ASSIGNED_BY)[number];
 export const ATTRIBUTION = ["author_claim", "quoted", "later_interpretation", "ai_synthesis", "user_understanding", "game_setting"] as const;
 export type Attribution = (typeof ATTRIBUTION)[number];
 
-/** Relations between knowledge (nodes, and books where meaningful). `related_to` is symmetric. */
-export const KNOWLEDGE_RELATIONS = ["defines", "explains", "supports", "refutes", "qualifies", "requires", "exemplifies", "compares", "applies_to", "related_to"] as const;
-/** From a book to knowledge: where the knowledge comes from. "introduces" needs evidence. */
-export const BOOK_RELATIONS = ["introduces", "expounds", "adopts", "criticizes", "mentions", "studied_in"] as const;
-export const RELATION_TYPES = [...KNOWLEDGE_RELATIONS, ...BOOK_RELATIONS] as const;
+/**
+ * Relations between knowledge, kept few so each is easy to choose:
+ * supports / refutes (a qualification is a refutes with a note "限定：…") /
+ * answers (a claim answering a question) / explains (definitions, examples
+ * and applications too) / requires (what must be understood first) /
+ * develops (builds on: intellectual lineage) / related_to (the fallback,
+ * comparisons too; symmetric).
+ */
+export const KNOWLEDGE_RELATIONS = ["supports", "refutes", "answers", "explains", "requires", "develops", "related_to"] as const;
+/** From a book to knowledge: expounds (also first statements and adoptions), criticizes, mentions; studied_in is added for a book's own session. */
+export const BOOK_RELATIONS = ["expounds", "criticizes", "mentions", "studied_in"] as const;
+/**
+ * Types from before the relation set was trimmed. Files that use them stay
+ * valid and show under the type they fold into; new relations cannot use them.
+ */
+export const LEGACY_RELATIONS = {
+  defines: "explains",
+  exemplifies: "explains",
+  applies_to: "explains",
+  qualifies: "refutes",
+  compares: "related_to",
+  introduces: "expounds",
+  adopts: "expounds",
+} as const;
+export type LegacyRelationType = keyof typeof LEGACY_RELATIONS;
+export const RELATION_TYPES = [...KNOWLEDGE_RELATIONS, ...BOOK_RELATIONS, ...(Object.keys(LEGACY_RELATIONS) as LegacyRelationType[])] as const;
 export type RelationType = (typeof RELATION_TYPES)[number];
+/** Book relations, legacy ones included: they start at a book. */
+export const FROM_BOOK_RELATIONS: readonly RelationType[] = [...BOOK_RELATIONS, "introduces", "adopts"];
 export const SYMMETRIC_RELATIONS: ReadonlySet<RelationType> = new Set(["related_to", "compares"]);
+/** The type a relation shows as: itself, or what a legacy type folds into. */
+export function canonicalRelation(type: string): string {
+  return (LEGACY_RELATIONS as Record<string, string>)[type] ?? type;
+}
 
 export const SOURCE_KINDS = ["bibliographic", "conversation", "web", "user_note", "book_text", "research", "model_explanation"] as const;
 export type SourceKind = (typeof SOURCE_KINDS)[number];
@@ -370,7 +397,7 @@ const VALIDATORS: Record<ObjectKind, (obj: Record<string, unknown>, problems: Pr
     str(obj, "scope", problems, { optional: true });
     str(obj, "note", problems, { optional: true, nonEmpty: false });
     if (obj.from_id === obj.to_id) problems.push({ path: "to_id", message: "a relation needs two different ends" });
-    if ((BOOK_RELATIONS as readonly string[]).includes(obj.type as string) && kindOfId(String(obj.from_id)) !== "book") {
+    if ((FROM_BOOK_RELATIONS as readonly string[]).includes(obj.type as string) && kindOfId(String(obj.from_id)) !== "book") {
       problems.push({ path: "from_id", message: `${obj.type} starts at a book` });
     }
   },

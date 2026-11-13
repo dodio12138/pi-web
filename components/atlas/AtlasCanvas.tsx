@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { CARD_H, CARD_W, type Point, type StructureFrames } from "./atlas-layout";
-import { ATTRIBUTION_LABEL, NODE_TYPE_LABEL, RELATION_LABEL, VERIFICATION_LABEL, type GraphCard, type GraphEdge } from "./atlas-client";
+import { ATTRIBUTION_LABEL, canonicalRelation, isSymmetricRelation, NODE_TYPE_LABEL, relationLabel, VERIFICATION_LABEL, type GraphCard, type GraphEdge } from "./atlas-client";
 
 // The node canvas: cards are HTML over an SVG layer of edges, all inside one
 // transformed plane. Drag the background to pan, the wheel to zoom, a card to
@@ -276,20 +276,20 @@ export function AtlasCanvas({ cards, edges: allEdges, positions, selected, fresh
           </defs>
           {edgePaths.map(({ edge, p1, p2, c }) => {
             const active = edgeLit(edge);
-            const symmetric = edge.type === "related_to" || edge.type === "compares";
+            const symmetric = isSymmetricRelation(edge.type);
             return (
               <path
                 key={edge.id}
                 d={`M ${p1.x} ${p1.y} Q ${c.x} ${c.y} ${p2.x} ${p2.y}`}
-                className={`atlas-edge atlas-edge-${edge.type}${active ? " is-active" : ""}${focused && !active ? " is-dim" : ""}`}
+                className={`atlas-edge atlas-edge-${canonicalRelation(edge.type)}${active ? " is-active" : ""}${focused && !active ? " is-dim" : ""}`}
                 markerEnd={symmetric ? undefined : "url(#atlas-arrow)"}
               />
             );
           })}
         </svg>
         {edgePaths.filter(({ edge }) => showLabel(edge)).map(({ edge, mid }) => (
-          <div key={`l-${edge.id}`} className={`atlas-edge-label atlas-edge-${edge.type}${edgeLit(edge) ? " is-active" : ""}`} style={{ left: mid.x, top: mid.y }} title={edge.note ?? undefined}>
-            {RELATION_LABEL[edge.type] ?? edge.type}
+          <div key={`l-${edge.id}`} className={`atlas-edge-label atlas-edge-${canonicalRelation(edge.type)}${edgeLit(edge) ? " is-active" : ""}`} style={{ left: mid.x, top: mid.y }} title={edge.note ?? undefined}>
+            {relationLabel(edge.type)}
           </div>
         ))}
         {cards.map((card) => {

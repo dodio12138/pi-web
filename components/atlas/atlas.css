@@ -70,14 +70,19 @@
 .atlas-edges { position: absolute; left: 0; top: 0; overflow: visible; color: var(--text-dim); }
 .atlas-edge { stroke: currentColor; stroke-width: 1.4; fill: none; }
 .atlas-edge.is-active { color: var(--accent); stroke-width: 2; }
+/* Four families: argument (supports green, refutes red, answers blue), understanding (grey), lineage (teal), loose (light, dashed). */
+.atlas-edge-supports { color: var(--ansi-green, #3a3); }
 .atlas-edge-refutes, .atlas-edge-criticizes { color: var(--ansi-red, #c44); }
-.atlas-edge-supports, .atlas-edge-adopts { color: var(--ansi-green, #3a3); }
-.atlas-edge-qualifies, .atlas-edge-requires { color: var(--ansi-yellow, #b80); }
-line.atlas-edge-related_to, line.atlas-edge-mentions { stroke-dasharray: 4 4; }
+.atlas-edge-answers { color: var(--ansi-blue, #48c); }
+.atlas-edge-develops { color: var(--ansi-cyan, #2aa); }
+line.atlas-edge-requires, path.atlas-edge-requires { stroke-dasharray: 6 3; }
+.atlas-edge-related_to, .atlas-edge-mentions { color: color-mix(in srgb, var(--text-dim) 70%, transparent); }
+path.atlas-edge-related_to, path.atlas-edge-mentions, line.atlas-edge-related_to, line.atlas-edge-mentions { stroke-dasharray: 3 4; }
 .atlas-edge-label { position: absolute; transform: translate(-50%, -50%); padding: 0 4px; font-size: 10px; line-height: 14px; background: var(--bg); border-radius: 3px; white-space: nowrap; pointer-events: auto; color: var(--text-muted); }
+.atlas-edge-label.atlas-edge-supports { color: var(--ansi-green, #3a3); }
 .atlas-edge-label.atlas-edge-refutes, .atlas-edge-label.atlas-edge-criticizes { color: var(--ansi-red, #c44); }
-.atlas-edge-label.atlas-edge-supports, .atlas-edge-label.atlas-edge-adopts { color: var(--ansi-green, #3a3); }
-.atlas-edge-label.atlas-edge-qualifies, .atlas-edge-label.atlas-edge-requires { color: var(--ansi-yellow, #b80); }
+.atlas-edge-label.atlas-edge-answers { color: var(--ansi-blue, #48c); }
+.atlas-edge-label.atlas-edge-develops { color: var(--ansi-cyan, #2aa); }
 
 .atlas-card { position: absolute; transform: translate(-50%, -50%); padding: 6px 8px 7px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; user-select: none; box-shadow: 0 1px 3px rgb(0 0 0 / 0.08); border-top: 3px solid var(--text-dim); }
 .atlas-card:hover { border-color: var(--text-dim); }

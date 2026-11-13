@@ -52,3 +52,25 @@ test("ids carry their kind and nothing else", () => {
   assert.equal(core.kindOfId(a), "node");
   assert.equal(core.kindOfId(core.newId("relation")), "relation");
 });
+
+test("the trimmed relation set: old types stay readable, new ones are refused with what to use", async () => {
+  const { scratchAtlas, patch } = await import("./helpers.mjs");
+  const t = { after: (fn) => test.after(fn) };
+  const { store } = scratchAtlas(t);
+  const made = store.applyPatch(patch([
+    { op: "create_node", ref: "$a", fields: { type: "claim", title: "A", attribution: "ai_synthesis" } },
+    { op: "create_node", ref: "$q", fields: { type: "question", title: "Q", attribution: "ai_synthesis" } },
+    { op: "create_relation", fields: { from_id: "$a", to_id: "$q", type: "answers", attribution: "ai_synthesis" } },
+  ]));
+  assert.equal(made.ok, true, JSON.stringify(made));
+  const old = store.applyPatch(patch([{ op: "create_relation", fields: { from_id: made.created.$a, to_id: made.created.$q, type: "qualifies", attribution: "ai_synthesis" } }]));
+  assert.equal(old.ok, false);
+  assert.match(old.errors[0].message, /"qualifies" is no longer used: use "refutes" with a note "限定：…"/);
+  // A relation already in a file with an old type is still valid and shows as its new type.
+  const legacy = { schema_version: 1, revision: 1, created_at: now, updated_at: now, source_refs: [], verification: "pending",
+    id: "rel-abc123def", from_id: "node-abc123def", to_id: "node-def456ghi", type: "exemplifies", attribution: "ai_synthesis" };
+  assert.deepEqual(core.validateObject("relation", legacy), []);
+  assert.equal(core.canonicalRelation("exemplifies"), "explains");
+  assert.equal(core.canonicalRelation("introduces"), "expounds");
+  assert.equal(core.canonicalRelation("answers"), "answers");
+});

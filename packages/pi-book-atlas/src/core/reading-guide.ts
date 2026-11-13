@@ -24,7 +24,7 @@ export const READING_LENSES: readonly ReadingLens[] = [
     label: "核心问题",
     question: "这本书主要在回答哪类问题？",
     options: ["是什么", "如何产生", "如何运行", "如何变化", "如何认识", "如何行动", "如何分配", "如何共处", "如何选择", "有何价值"],
-    organizes: "写成书的入口问题；尚未回答的写成 question 节点",
+    organizes: "写成书的入口问题；尚未回答的写成 question 节点，答案用 answers 连上",
   },
   {
     key: "objects",
@@ -52,7 +52,7 @@ export const READING_LENSES: readonly ReadingLens[] = [
     label: "表达行为",
     question: "这一段在做什么？",
     options: ["定义", "解释", "论证", "举例", "叙述", "描写", "建议", "指令", "规定", "提问"],
-    organizes: "定义→concept；论证→claim 加 supports/refutes；举例→example 加 exemplifies；建议、指令→method；提问→question",
+    organizes: "定义→concept；论证→claim 加 supports/refutes；举例→example 加 explains；建议、指令→method；提问→question",
   },
   {
     key: "organization",
@@ -66,7 +66,7 @@ export const READING_LENSES: readonly ReadingLens[] = [
     label: "谁在说、什么态度",
     question: "这是作者原文、注释引文、注者判断还是后人研究？态度是赞同、反对、质疑还是对照？",
     options: ["作者正文", "注释引文", "注者判断", "后人研究", "赞同", "反对", "质疑", "对照", "未表态"],
-    organizes: "决定归属：作者正文→author_claim（须有来源），注释引文→quoted，注者判断、后人研究→later_interpretation；反对、质疑写成 refutes/qualifies 关系",
+    organizes: "决定归属：作者正文→author_claim（须有来源），注释引文→quoted，注者判断、后人研究→later_interpretation；反对、质疑写成 refutes 关系（只是限定时备注「限定：…」）；继承、发展写成 develops",
   },
   {
     key: "threshold",

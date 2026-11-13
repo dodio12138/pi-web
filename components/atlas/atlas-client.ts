@@ -5,10 +5,17 @@ export const NODE_TYPE_LABEL: Record<string, string> = {
   book: "书", concept: "概念", claim: "观点", method: "方法", skill: "技能", question: "问题", example: "例子",
 };
 export const RELATION_LABEL: Record<string, string> = {
-  defines: "定义", explains: "解释", supports: "支持", refutes: "反驳", qualifies: "限定", requires: "需要先懂",
-  exemplifies: "举例", compares: "对比", applies_to: "应用于", related_to: "相关",
-  introduces: "提出", expounds: "阐述", adopts: "采用", criticizes: "批评", mentions: "提到", studied_in: "研读",
+  supports: "支持", refutes: "反驳", answers: "回答", explains: "解释", requires: "前提", develops: "发展自", related_to: "相关",
+  expounds: "阐述", criticizes: "批评", mentions: "提到", studied_in: "研读",
 };
+/** Types from before the trim, shown as what they fold into (the files keep them). */
+const LEGACY_RELATION: Record<string, string> = {
+  defines: "explains", exemplifies: "explains", applies_to: "explains", qualifies: "refutes", compares: "related_to", introduces: "expounds", adopts: "expounds",
+};
+export const canonicalRelation = (type: string): string => LEGACY_RELATION[type] ?? type;
+export const relationLabel = (type: string): string => RELATION_LABEL[canonicalRelation(type)] ?? type;
+/** Drawn without an arrow: no direction to show. */
+export const isSymmetricRelation = (type: string): boolean => canonicalRelation(type) === "related_to";
 export const ATTRIBUTION_LABEL: Record<string, string> = {
   author_claim: "作者观点", quoted: "引述", later_interpretation: "后人解读", ai_synthesis: "AI 概括",
   user_understanding: "我的理解", game_setting: "虚构设定",
@@ -17,8 +24,14 @@ export const VERIFICATION_LABEL: Record<string, string> = {
   pending: "待核验", partial: "部分核验", verified: "已核验",
 };
 export const COVERAGE_LABEL: Record<string, string> = { core: "核心", discussed: "讨论", mentioned: "提及" };
-export const KNOWLEDGE_RELATION_TYPES = ["explains", "supports", "refutes", "qualifies", "requires", "exemplifies", "compares", "applies_to", "defines", "related_to"];
-export const BOOK_RELATION_TYPES = ["expounds", "introduces", "adopts", "criticizes", "mentions"];
+export const KNOWLEDGE_RELATION_TYPES = ["supports", "refutes", "answers", "explains", "requires", "develops", "related_to"];
+export const BOOK_RELATION_TYPES = ["expounds", "criticizes", "mentions"];
+/** What each relation means, for the picker. */
+export const RELATION_HINT: Record<string, string> = {
+  supports: "这条是那条的论据", refutes: "这条反对那条（只是限定时在备注里写「限定：…」）", answers: "这条回答那个问题",
+  explains: "这条解释那条，包括定义、举例、应用", requires: "理解这条要先懂那条", develops: "这条在那条的基础上发展而来",
+  related_to: "说不出具体关系时才用", expounds: "书中阐述了它", criticizes: "书批评了它", mentions: "书只是提到",
+};
 export const NODE_TYPES = ["concept", "claim", "method", "skill", "question", "example"];
 
 export interface AtlasBook { id: string; title: string; authors: string[]; classes: string[]; tags: string[]; knowledge: number; updated_at: string }

@@ -10,7 +10,10 @@ import {
   KNOWLEDGE_RELATION_TYPES,
   NODE_TYPE_LABEL,
   patchProblem,
+  RELATION_HINT,
   RELATION_LABEL,
+  canonicalRelation,
+  relationLabel,
   VERIFICATION_LABEL,
   type AtlasTag,
   type GraphCard,
@@ -291,7 +294,7 @@ export function AtlasDetail({ id, tags, cards, onAsk, onOpenBook, onSelect, onHi
         {view.relations.map((r) => (
           <div key={r.id} className="atlas-relation">
             <span className="atlas-dim">{r.direction === "out" ? "→" : "←"}</span>
-            <span className={`atlas-rel-type atlas-edge-${r.type}`}>{RELATION_LABEL[r.type] ?? r.type}</span>
+            <span className={`atlas-rel-type atlas-edge-${canonicalRelation(r.type)}`}>{relationLabel(r.type)}</span>
             <button type="button" className="atlas-link" onClick={() => onSelect(r.other_id)}>{r.other_title}</button>
             <span className="atlas-dim" title={ATTRIBUTION_LABEL[r.attribution]}>{ATTRIBUTION_LABEL[r.attribution] ?? ""}</span>
             <button type="button" className="atlas-btn atlas-btn-icon" title="移除这条关系（归档，可恢复）" aria-label="移除关系" onClick={() => void apply([{ op: "archive", id: r.id }])}>×</button>
@@ -300,13 +303,14 @@ export function AtlasDetail({ id, tags, cards, onAsk, onOpenBook, onSelect, onHi
         {relation ? (
           <div className="atlas-row atlas-wrap">
             <select value={relation.type} onChange={(e) => setRelation({ ...relation, type: e.target.value })}>
-              {relationTypes.map((t) => <option key={t} value={t}>{RELATION_LABEL[t]}</option>)}
+              {relationTypes.map((t) => <option key={t} value={t} title={RELATION_HINT[t]}>{RELATION_LABEL[t]}</option>)}
             </select>
             <select value={relation.to} onChange={(e) => setRelation({ ...relation, to: e.target.value })}>
               <option value="">选择画板上的卡片…</option>
               {targets.map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}
             </select>
             <button type="button" className="atlas-btn atlas-btn-primary" disabled={!relation.to || saving} onClick={() => void addRelation()}>连线</button>
+            <span className="atlas-dim" style={{ flexBasis: "100%" }}>{RELATION_HINT[relation.type]}</span>
             <button type="button" className="atlas-btn" onClick={() => setRelation(null)}>取消</button>
           </div>
         ) : (

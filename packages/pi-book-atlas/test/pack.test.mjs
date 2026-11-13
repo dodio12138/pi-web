@@ -27,7 +27,7 @@ function library(store) {
     { op: "create_relation", fields: { from_id: "$lev", to_id: "$quote", type: "expounds", attribution: "ai_synthesis" } },
     { op: "create_relation", fields: { from_id: "$lev", to_id: "$unsure", type: "mentions", attribution: "ai_synthesis" } },
     { op: "create_relation", fields: { from_id: "$mine", to_id: "$state", type: "related_to", attribution: "user_understanding" } },
-    { op: "create_relation", fields: { from_id: "$cyb", to_id: "$neg", type: "introduces", attribution: "ai_synthesis" } },
+    { op: "create_relation", fields: { from_id: "$cyb", to_id: "$neg", type: "expounds", attribution: "ai_synthesis" } },
   ]));
   assert.equal(result.ok, true, JSON.stringify(result));
   const merged = store.applyPatch(patch([{ op: "merge_tags", from_ids: [result.created.$old], into_id: result.created.$con }]));

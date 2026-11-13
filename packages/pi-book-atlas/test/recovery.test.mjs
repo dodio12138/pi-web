@@ -24,7 +24,7 @@ function bigChange(ids) {
     { op: "update_node", id: ids.$n, changes: { summary: "新的解释" } },
     { op: "create_node", ref: "$m", fields: { type: "concept", title: "正反馈", attribution: "ai_synthesis" } },
     { op: "update_tag", id: ids.$t, changes: { definition: "控制理论里的反馈" } },
-    { op: "create_relation", fields: { from_id: ids.$n, to_id: "$m", type: "compares", attribution: "ai_synthesis" } },
+    { op: "create_relation", fields: { from_id: ids.$n, to_id: "$m", type: "related_to", attribution: "ai_synthesis" } },
   ]);
 }
 
