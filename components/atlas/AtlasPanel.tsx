@@ -50,6 +50,9 @@ export function AtlasPanel({ active, sessionId, onInsert, onOpenSession }: Props
   const [booksOverlay, setBooksOverlay] = useState(false);
   const sidebarVisible = narrow ? booksOverlay : showBooks;
   const [status, setStatus] = useState<string>("");
+  const [packOpen, setPackOpen] = useState(false);
+  const [packUntil, setPackUntil] = useState("");
+  const [packNotes, setPackNotes] = useState(false);
   const seenRef = useRef<{ revision: number; cards: Map<string, number> } | null>(null);
   const changeRef = useRef<string>("");
   const selectedRef = useRef<string[]>([]);
@@ -190,6 +193,16 @@ export function AtlasPanel({ active, sessionId, onInsert, onOpenSession }: Props
     if (cards.length) onInsert(askText(action, cards));
   };
 
+  // The pack follows the tag filter on screen; a year makes it a game pack.
+  const packUrl = () => {
+    const params = new URLSearchParams({ op: "pack" });
+    if (tagIds.length) params.set("tags", tagIds.join(","));
+    if (packUntil.trim()) params.set("until", packUntil.trim());
+    if (packNotes) params.set("notes", "1");
+    return `/api/atlas?${params}`;
+  };
+  const packYearOk = !packUntil.trim() || /^-?\d+$/.test(packUntil.trim());
+
   const createLibrary = async () => {
     await atlasApi.post({ op: "create" });
     void loadOverview();
@@ -244,6 +257,32 @@ export function AtlasPanel({ active, sessionId, onInsert, onOpenSession }: Props
         <button type="button" className="atlas-btn" onClick={() => void newNode()} title="新建一个知识点">+ 节点</button>
         <button type="button" className="atlas-btn" onClick={() => onInsert("/atlas organize")} title="把本次讨论整理进知识库">整理本次讨论</button>
         <button type="button" className="atlas-btn" onClick={() => void rearrange()} title="重新排列这个视图里的所有卡片">重排</button>
+        <span className="atlas-pop-anchor">
+          <button type="button" className={`atlas-btn${packOpen ? " is-on" : ""}`} onClick={() => setPackOpen((v) => !v)} aria-expanded={packOpen} title="导出给其他应用或游戏用的资料包">导出资料包</button>
+          {packOpen && (
+            <div className="atlas-pop" role="dialog" aria-label="导出资料包">
+              <div className="atlas-dim">
+                {tagIds.length
+                  ? `按当前标签筛选：${(overview.tags ?? []).filter((t) => tagIds.includes(t.id)).map((t) => t.name).join("、")}（含子标签）`
+                  : "全部书和知识（在左侧选标签可以缩小范围）"}
+              </div>
+              <label className="atlas-pop-row">
+                游戏截止年代
+                <input value={packUntil} onChange={(e) => setPackUntil(e.target.value)} placeholder="如 1700，公元前写负数" inputMode="numeric" />
+              </label>
+              {packUntil.trim() && <div className="atlas-dim">只包含该年及以前出版的书、以及经由这些书得到的知识；年代未知的书不包含。</div>}
+              <label className="atlas-pop-check">
+                <input type="checkbox" checked={packNotes} onChange={(e) => setPackNotes(e.target.checked)} />
+                包含「我的理解」类笔记
+              </label>
+              <div className="atlas-dim">不会包含：对话记录、会话 ID、画板布局、本机路径。</div>
+              <div className="atlas-row">
+                <a className={`atlas-btn atlas-btn-primary${packYearOk ? "" : " is-disabled"}`} href={packYearOk ? packUrl() : undefined} download onClick={() => packYearOk && setPackOpen(false)}>下载 JSON</a>
+                {!packYearOk && <span className="atlas-dim">年代要写整数</span>}
+              </div>
+            </div>
+          )}
+        </span>
         {graph && graph.hidden.length > 0 && <button type="button" className="atlas-btn" onClick={() => void showHidden()}>显示已移除（{graph.hidden.length}）</button>}
       </div>
 

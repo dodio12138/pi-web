@@ -16,3 +16,4 @@ export { READING_LENSES, readingLensPrompt, readingLensTemplate, type ReadingLen
 export { BOOK_CORE_TAGS, CLC_CLASSES, CLC_MAX_CODES, CLC_SCHEME, CLC_SECOND_LEVEL, CLC_VERSION, clcCandidates, clcClassOf, clcLabel, clcPrompt } from "./clc";
 export { buildGraph, graphKey, listBooks, listTags, type Graph, type GraphCard, type GraphEdge, type GraphRequest, type GraphViewKind } from "./graph";
 export { LAYOUT_FILE, readLayout, updateLayout, type AtlasLayout, type LayoutChange, type Point } from "./layout";
+export { exportPack, lookupPack, PACK_FORMAT, PACK_SCHEMA_VERSION, type AtlasPack, type GameFilter, type PackOptions, type PackUse } from "./pack";

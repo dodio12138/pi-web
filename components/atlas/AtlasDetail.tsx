@@ -44,6 +44,7 @@ interface Draft {
   body: string;
   aliases: string;
   authors: string;
+  year: string;
   codes: string;
   questions: string;
 }
@@ -57,6 +58,7 @@ function draftOf(view: ObjectView): Draft {
     body: String(o.body ?? ""),
     aliases: list(o.aliases),
     authors: list(o.authors),
+    year: o.published_year == null ? "" : String(o.published_year),
     codes: list((o.classification as { codes?: string[] } | undefined)?.codes),
     questions: Array.isArray(o.entry_questions) ? (o.entry_questions as string[]).join("\n") : "",
   };
@@ -111,7 +113,7 @@ export function AtlasDetail({ id, tags, cards, onAsk, onSelect, onHide, onChange
     }
     setDraft(merged);
     setBase(theirs);
-    const names: Record<string, string> = { title: "标题", summary: "概括", body: "正文", aliases: "别名", authors: "作者", codes: "分类", questions: "入口问题" };
+    const names: Record<string, string> = { title: "标题", summary: "概括", body: "正文", aliases: "别名", authors: "作者", year: "出版年份", codes: "分类", questions: "入口问题" };
     setProblem(clashes.length
       ? `已合并最新版本。${clashes.map((k) => names[k]).join("、")}两边都改过，保留了你的内容；另一版：${clashes.map((k) => `「${theirs[k as keyof Draft].slice(0, 80)}」`).join(" ")}`
       : null);
@@ -141,6 +143,9 @@ export function AtlasDetail({ id, tags, cards, onAsk, onSelect, onHide, onChange
     const changes: Record<string, unknown> = { title: draft.title.trim(), body: draft.body };
     if (isBook) {
       changes.authors = split(draft.authors);
+      const year = draft.year.trim();
+      if (year && !/^-?\d+$/.test(year)) { setProblem("出版年份要写整数，公元前写负数"); return; }
+      changes.published_year = year ? Number(year) : null;
       changes.entry_questions = draft.questions.split("\n").map((q) => q.trim()).filter(Boolean);
       const codes = split(draft.codes).map((c) => c.toUpperCase());
       changes.classification = codes.length ? { scheme_id: "clc", scheme_version: "5", codes } : { scheme_id: null, scheme_version: null, codes: [] };
@@ -201,6 +206,7 @@ export function AtlasDetail({ id, tags, cards, onAsk, onSelect, onHide, onChange
           {isBook ? (
             <>
               <label>作者<input value={draft.authors} onChange={(e) => setDraft({ ...draft, authors: e.target.value })} placeholder="用顿号分隔" /></label>
+              <label>首次出版年份<input value={draft.year} onChange={(e) => setDraft({ ...draft, year: e.target.value })} placeholder="如 1651，公元前写负数；不确定就留空" inputMode="numeric" /></label>
               <label>中图法分类<input value={draft.codes} onChange={(e) => setDraft({ ...draft, codes: e.target.value })} placeholder="主类在前，如 D0、B5" /></label>
               <label>入口问题<textarea rows={3} value={draft.questions} onChange={(e) => setDraft({ ...draft, questions: e.target.value })} placeholder="每行一个" /></label>
             </>
@@ -221,7 +227,7 @@ export function AtlasDetail({ id, tags, cards, onAsk, onSelect, onHide, onChange
           <h3 className="atlas-detail-title">{String(o.title ?? "")}</h3>
           {isBook ? (
             <div className="atlas-detail-meta">
-              {Array.isArray(o.authors) && o.authors.length > 0 && <div>{(o.authors as string[]).join("、")}</div>}
+              {Array.isArray(o.authors) && o.authors.length > 0 && <div>{(o.authors as string[]).join("、")}{o.published_year != null && `，${Number(o.published_year) < 0 ? `公元前 ${-Number(o.published_year)}` : String(o.published_year)} 年`}</div>}
               {Array.isArray((o.classification as { codes?: string[] })?.codes) && (o.classification as { codes: string[] }).codes.length > 0 && (
                 <div className="atlas-mono">中图法 {(o.classification as { codes: string[] }).codes.join(" · ")}</div>
               )}

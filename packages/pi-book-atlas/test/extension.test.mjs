@@ -300,3 +300,27 @@ test("/atlas guide walks one book through the lenses and writes its card, class 
   await host.emit("agent_settled", {});
   assert.deepEqual(host.log().pending("session-abc").map((m) => m.entry_id), [u1]);
 });
+
+test("/atlas pack writes a pack with the chosen tags and game world, saying what was left out", async (t) => {
+  const host = await fakePi(t);
+  const made = await host.tool("atlas_apply_patch", { operations: [
+    { op: "create_tag", ref: "$t", fields: { type: "topic", name: "社会契约论" } },
+    { op: "create_book", ref: "$b", fields: { title: "利维坦", authors: ["霍布斯"], published_year: 1651, tag_bindings: [{ tag_id: "$t", coverage: "core", assigned_by: "human", source_refs: [] }] } },
+    { op: "create_book", fields: { title: "政府论", authors: ["洛克"], published_year: 1689, tag_bindings: [{ tag_id: "$t", coverage: "core", assigned_by: "human", source_refs: [] }] } },
+  ] });
+  assert.equal(made.ok, true, JSON.stringify(made));
+  await host.command("pack");
+  assert.match(host.notices.at(-1).text, /Usage: \/atlas pack/);
+  await host.command("pack out.json tags=没有的标签");
+  assert.match(host.notices.at(-1).text, /Not in the library: 没有的标签/);
+  await host.command("pack out.json until=十七世纪");
+  assert.match(host.notices.at(-1).text, /needs a year/);
+
+  host.ctx.cwd = host.root;
+  await host.command("pack out.json tags=社会契约论 until=1660");
+  assert.match(host.notices.at(-1).text, /1 books[\s\S]*1 outside the game's world/);
+  const pack = JSON.parse(readFileSync(join(host.root, "out.json"), "utf8"));
+  assert.equal(pack.format, "pi-book-atlas/pack");
+  assert.deepEqual(pack.books.map((b) => b.title), ["利维坦"]);
+  assert.deepEqual(pack.filters.tag_ids, [made.created.$t]);
+});

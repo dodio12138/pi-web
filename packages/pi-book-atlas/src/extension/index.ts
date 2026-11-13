@@ -8,7 +8,10 @@ import {
   ConversationLog,
   describe,
   exportBackup,
+  exportPack,
+  findTagsByLabel,
   importBackup,
+  normalizeLabel,
   openAtlas,
   BOOK_CORE_TAGS,
   clcLabel,
@@ -219,7 +222,7 @@ export default function piBookAtlas(pi: ExtensionAPI) {
     name: "atlas_apply_patch",
     label: "Atlas update",
     description: `Change the knowledge library in one all-or-nothing patch. Operations (each an object with "op"):
-create_book {ref?, fields:{title, authors?, classification?: {scheme_id: "clc", scheme_version: "5", codes: [main 中图法 second-level class, ≤2 others]}, entry_questions?, tag_bindings?, source_refs?, body?}} · update_book {id, changes}
+create_book {ref?, fields:{title, authors?, published_year? (first publication, negative for BCE; omit when unsure), classification?: {scheme_id: "clc", scheme_version: "5", codes: [main 中图法 second-level class, ≤2 others]}, entry_questions?, tag_bindings?, source_refs?, body?}} · update_book {id, changes}
 create_node {ref?, fields:{type: concept|claim|method|skill|question|example, title, summary?, aliases?, body?, attribution, tag_bindings?, source_refs?}} · update_node {id, changes}
 create_tag {ref?, fields:{type: domain|topic|question|method, name, definition?, aliases?, parent_ids?}} · update_tag {id, changes} · merge_tags {from_ids, into_id}
 create_relation {ref?, fields:{from_id, to_id, type, attribution, scope?, note?, source_refs?}} · update_relation {id, changes}
@@ -282,7 +285,7 @@ A refused patch writes nothing and says why: duplicates name the existing id, re
   // ---- /atlas ------------------------------------------------------------
 
   pi.registerCommand("atlas", {
-    description: "Book Atlas: status | on | off | organize [note] | guide <书名> | search <words> | export <file> | import <file>",
+    description: "Book Atlas: status | on | off | organize [note] | guide <书名> | search <words> | export <file> | import <file> | pack <file> [tags=…] [until=…] [books=…] [notes]",
     handler: async (args, ctx) => {
       const [sub = "status"] = args.trim().split(/\s+/).filter(Boolean);
       const arg = args.trim().slice(sub.length).trim();
@@ -384,6 +387,29 @@ A refused patch writes nothing and says why: duplicates name the existing id, re
             notify(`Exported ${store.books.size} books and ${store.nodes.size} nodes to ${path}`);
             return;
           }
+          case "pack": {
+            // /atlas pack <file.json> [tags=名称或ID,…] [until=年份] [books=书名或ID,…] [notes]
+            const [file, ...opts] = arg.split(/\s+/).filter(Boolean);
+            if (!file) { notify("Usage: /atlas pack <file.json> [tags=a,b] [until=1700] [books=a,b] [notes]", "warning"); return; }
+            const { store } = atlas();
+            const option = (key: string) => opts.find((o) => o.startsWith(`${key}=`))?.slice(key.length + 1).split(/[,，、]/).filter(Boolean);
+            const unknown: string[] = [];
+            const tagIds = option("tags")?.map((t) => store.tags.has(t) ? t : findTagsByLabel(store.tags, t)[0]?.id ?? (unknown.push(t), "")).filter(Boolean);
+            const bookIds = option("books")?.map((b) => store.books.has(b) ? b : [...store.books.values()].find((x) => normalizeLabel(x.title) === normalizeLabel(b))?.id ?? (unknown.push(b), "")).filter(Boolean);
+            if (unknown.length) { notify(`Not in the library: ${unknown.join(", ")}`, "warning"); return; }
+            const untilText = option("until")?.[0];
+            const until = untilText !== undefined ? Number(untilText) : undefined;
+            if (until !== undefined && !Number.isInteger(until)) { notify(`until= needs a year, not "${untilText}"`, "warning"); return; }
+            const game = until !== undefined || bookIds ? { ...(until !== undefined ? { until_year: until } : {}), ...(bookIds ? { book_ids: bookIds } : {}) } : undefined;
+            const pack = exportPack(store, { tag_ids: tagIds, include_user_notes: opts.includes("notes"), game });
+            const path = resolve(ctx.cwd, file);
+            writeFileSync(path, `${JSON.stringify(pack, null, 2)}\n`);
+            notify([
+              `Pack written to ${path}: ${pack.counts.books} books, ${pack.counts.nodes} knowledge nodes, ${pack.counts.tags} tags.`,
+              `Left out: conversations, layout${pack.excluded.user_notes ? ", your own notes (add notes to include)" : ""}${pack.excluded.outside_game ? `, ${pack.excluded.outside_game} outside the game's world` : ""}.`,
+            ].join("\n"));
+            return;
+          }
           case "import": {
             if (!arg) { notify("Usage: /atlas import <file.json>", "warning"); return; }
             const { store } = atlas();
@@ -398,7 +424,7 @@ A refused patch writes nothing and says why: duplicates name the existing id, re
             return;
           }
           default:
-            notify("Usage: /atlas status | on | off | organize [note] | guide <书名> | search <words> | export <file> | import <file>", "warning");
+            notify("Usage: /atlas status | on | off | organize [note] | guide <书名> | search <words> | export <file> | import <file> | pack <file> [tags=…] [until=…] [books=…] [notes]", "warning");
         }
       } catch (error) {
         notify(`Atlas: ${(error as Error).message}`, "error");

@@ -70,6 +70,8 @@ export interface TagBinding {
 export interface Book extends Common {
   title: string;
   authors: string[];
+  /** Year of first publication, negative for BCE; absent when unknown. Game packs filter on it. */
+  published_year?: number | null;
   /** Ids in other systems, e.g. `book_atlas` for the 文脉 workbench, namespaced by the key. */
   external_ids: Record<string, string>;
   classification: { scheme_id: string | null; scheme_version: string | null; codes: string[] };
@@ -255,6 +257,7 @@ const VALIDATORS: Record<ObjectKind, (obj: Record<string, unknown>, problems: Pr
     withSources(obj, problems);
     str(obj, "title", problems);
     strList(obj, "authors", problems);
+    if (obj.published_year != null && !Number.isInteger(obj.published_year)) problems.push({ path: "published_year", message: "must be a whole year (negative for BCE) or null" });
     if (!isRecord(obj.external_ids) || Object.values(obj.external_ids).some((v) => typeof v !== "string")) {
       problems.push({ path: "external_ids", message: "must map names to string ids" });
     }

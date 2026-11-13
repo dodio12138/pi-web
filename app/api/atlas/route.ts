@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import {
   buildGraph,
   describe,
+  exportPack,
   graphKey,
   listBooks,
   listTags,
@@ -91,6 +92,19 @@ export async function GET(req: Request) {
         const saved = layout.positions[key] ?? {};
         const positions = Object.fromEntries(graph.cards.filter((c) => saved[c.id]).map((c) => [c.id, saved[c.id]]));
         return NextResponse.json({ ...graph, positions, hidden: layout.hidden[key] ?? [] }, { headers: NO_STORE });
+      }
+      case "pack": {
+        // A download: the same pack /atlas pack writes.
+        const until = params.get("until");
+        const books = list(params.get("books"));
+        const untilYear = until ? Number(until) : undefined;
+        if (until && !Number.isInteger(untilYear)) return NextResponse.json({ error: "until needs a year" }, { status: 400, headers: NO_STORE });
+        const game = untilYear !== undefined || books.length ? { ...(untilYear !== undefined ? { until_year: untilYear } : {}), ...(books.length ? { book_ids: books } : {}) } : undefined;
+        const pack = exportPack(store, { tag_ids: list(params.get("tags")), include_user_notes: params.get("notes") === "1", game });
+        const stamp = pack.exported_at.slice(0, 10);
+        return new NextResponse(`${JSON.stringify(pack, null, 2)}\n`, {
+          headers: { ...NO_STORE, "Content-Type": "application/json; charset=utf-8", "Content-Disposition": `attachment; filename="atlas-pack-${stamp}.json"` },
+        });
       }
       case "read": {
         const id = params.get("id") ?? "";

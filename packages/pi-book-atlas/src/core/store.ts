@@ -90,7 +90,7 @@ const PROTECTED_FIELDS = new Set(["id", "schema_version", "revision", "created_a
 // ---------------------------------------------------------------------------
 // Files
 
-const BOOK_KEYS = ["schema_version", "id", "revision", "title", "authors", "external_ids", "classification", "tag_bindings", "entry_questions", "verification", "source_refs", "description_profile", "archived", "created_at", "updated_at"];
+const BOOK_KEYS = ["schema_version", "id", "revision", "title", "authors", "published_year", "external_ids", "classification", "tag_bindings", "entry_questions", "verification", "source_refs", "description_profile", "archived", "created_at", "updated_at"];
 const NODE_KEYS = ["schema_version", "id", "revision", "type", "title", "summary", "aliases", "tag_bindings", "attribution", "verification", "source_refs", "archived", "created_at", "updated_at"];
 
 function ordered(obj: Record<string, unknown>, keys: string[]): Record<string, unknown> {
@@ -520,6 +520,7 @@ class Draft {
           id: f.id ?? newId("book"),
           title: f.title,
           authors: f.authors ?? [],
+          ...(f.published_year != null ? { published_year: f.published_year } : {}),
           external_ids: f.external_ids ?? {},
           classification: f.classification ?? { scheme_id: null, scheme_version: null, codes: [] },
           tag_bindings: this.bindings(f.tag_bindings, warnings),
