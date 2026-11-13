@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { NextResponse } from "next/server";
 import {
   buildGraph,
+  ConversationLog,
   describe,
   exportPack,
   findBookSession,
@@ -20,7 +21,7 @@ import {
 } from "@/packages/pi-book-atlas/src/core/index";
 import { resolveAtlasRoot, type AtlasSettings } from "@/packages/pi-book-atlas/src/root";
 import { getGlobalSettingsPath } from "@/lib/global-settings-file";
-import { readAtlasSettings, sessionLearning, updateAtlasSettings, type AtlasSettingsChange } from "@/lib/atlas-settings";
+import { readAtlasSettings, sessionLearningState, updateAtlasSettings, type AtlasSettingsChange } from "@/lib/atlas-settings";
 import { readSessionInfo, resolveSessionPath } from "@/lib/session-reader";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
 
@@ -68,8 +69,11 @@ export async function GET(req: Request) {
       // The extension's switch and folder, and whether this session learns.
       const view = await readAtlasSettings();
       const sessionId = params.get("session_id");
-      const learning = sessionId && view.installed ? await sessionLearning(sessionId, view.autoEnable) : null;
-      return NextResponse.json({ ...view, learning }, { headers: NO_STORE });
+      const { learning, fixed } = sessionId && view.installed ? await sessionLearningState(sessionId, view.autoEnable, view.root) : { learning: null, fixed: false };
+      // Kept messages not yet in the library: what the graph does not show yet.
+      const pending = sessionId && learning ? new ConversationLog(view.root).pending(sessionId).length : 0;
+      // A reading session (library folder) has no switch: it always learns.
+      return NextResponse.json({ ...view, learning, readingSession: fixed, pending }, { headers: NO_STORE });
     }
     if (op === "book-session") {
       // One book, one session: the one /atlas guide last linked, if it still exists.

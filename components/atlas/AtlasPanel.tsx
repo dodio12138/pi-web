@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AtlasCanvas } from "./AtlasCanvas";
 import { AtlasDetail } from "./AtlasDetail";
-import { placeCards, type Point } from "./atlas-layout";
+import { layeredLayout, placeCards, type Point } from "./atlas-layout";
 import { askText, atlasApi, type AtlasGraph, type AtlasOverview, type GraphView } from "./atlas-client";
 import { fetchAtlasSettings, saveAtlasSettings, type AtlasSettingsState } from "./AtlasSettings";
 import "./atlas.css";
@@ -113,7 +113,8 @@ export function AtlasPanel({ active, sessionId, onInsert, onSend, onOpenBook, on
       }
       seenRef.current = { revision: next.revision, cards: new Map(next.cards.map((c) => [c.id, c.revision])) };
       // Place only cards without a saved position, and save where they went.
-      const placed = placeCards(next.cards, next.edges, next.positions);
+      // A view seen for the first time gets the tidy rows; later, new cards fill in around the user's arrangement.
+      const placed = Object.keys(next.positions).length === 0 ? layeredLayout(next.cards, next.edges) : placeCards(next.cards, next.edges, next.positions);
       setPositions({ ...next.positions, ...placed });
       setGraph(next);
       if (Object.keys(placed).length) void atlasApi.layout({ view: next.key, positions: placed });
@@ -145,12 +146,14 @@ export function AtlasPanel({ active, sessionId, onInsert, onSend, onOpenBook, on
           void loadGraph();
         }
         changeRef.current = token;
+        // Messages are kept as each turn ends: the count to organize moves without a commit.
+        void loadSetup();
       } catch { /* next tick */ }
     };
     void tick();
     const timer = window.setInterval(tick, 3000);
     return () => { stopped = true; window.clearInterval(timer); };
-  }, [active, overview?.exists, loadGraph, loadOverview]);
+  }, [active, overview?.exists, loadGraph, loadOverview, loadSetup]);
 
   useEffect(() => {
     if (!status) return;
@@ -167,7 +170,7 @@ export function AtlasPanel({ active, sessionId, onInsert, onSend, onOpenBook, on
     if (!graph) return;
     const cleared = Object.fromEntries(graph.cards.map((c) => [c.id, null]));
     await atlasApi.layout({ view: graph.key, positions: cleared });
-    const placed = placeCards(graph.cards, graph.edges, {});
+    const placed = layeredLayout(graph.cards, graph.edges);
     setPositions(placed);
     await atlasApi.layout({ view: graph.key, positions: placed });
     setStatus("已重新排列");
@@ -309,7 +312,9 @@ export function AtlasPanel({ active, sessionId, onInsert, onSend, onOpenBook, on
         <span style={{ flex: 1 }} />
         {status && <span className="atlas-status">{status}</span>}
         <button type="button" className="atlas-btn" onClick={() => void newNode()} title="新建一个知识点">+ 节点</button>
-        {sessionId && setup?.installed && (
+        {sessionId && setup?.installed && (setup.readingSession ? (
+          <span className="atlas-chip atlas-reading" title="这个会话在知识库目录里：对话自动记录，可以整理进知识库">● 读书会话</span>
+        ) : (setup.autoEnable && setup.learning) ? null : (
           <button
             type="button"
             className={`atlas-btn${setup.learning ? " is-on" : ""}`}
@@ -317,15 +322,15 @@ export function AtlasPanel({ active, sessionId, onInsert, onSend, onOpenBook, on
             aria-pressed={Boolean(setup.learning)}
             title={setup.learning ? "本会话在学习模式：消息会被记录，可以整理进知识库。点击关闭" : "开启后，本会话的消息会被记录，可以整理进知识库"}
           >{setup.learning ? "● 学习模式" : "开启学习模式"}</button>
-        )}
+        ))}
         <button
           type="button"
           className="atlas-btn"
           disabled={!sessionId || !setup?.learning}
           onClick={() => send("/atlas organize", "已发送整理请求")}
-          title={!setup?.learning ? "先开启学习模式" : "让 Agent 把本次讨论整理进知识库"}
-        >整理本次讨论</button>
-        <button type="button" className="atlas-btn" onClick={() => void rearrange()} title="重新排列这个视图里的所有卡片">重排</button>
+          title={!setup?.learning ? "先开启学习模式" : setup.pending ? `还有 ${setup.pending} 条消息没进知识库：让 Agent 整理` : "本次讨论都已在知识库里"}
+        >整理本次讨论{setup?.learning && setup.pending ? `（${setup.pending}）` : ""}</button>
+        <button type="button" className="atlas-btn" onClick={() => void rearrange()} title="按层次重新排列：书在上，直接相关的知识在下一行，再往外的在更下面">重排</button>
         <span className="atlas-pop-anchor">
           <button type="button" className={`atlas-btn${packOpen ? " is-on" : ""}`} onClick={() => setPackOpen((v) => !v)} aria-expanded={packOpen} title="导出给其他应用或游戏用的资料包">导出资料包</button>
           {packOpen && (

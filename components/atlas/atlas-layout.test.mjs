@@ -41,3 +41,42 @@ test("asking about cards carries their ids and content into the chat", async () 
   assert.match(two, /请比较这些知识点的异同。/);
   assert.match(two, /node-a[\s\S]*node-b/);
 });
+
+test("the tidy layout puts the book on top and its knowledge in rows below, without overlaps", async () => {
+  const { layeredLayout } = await jiti.import("./atlas-layout.ts");
+  const cards = [
+    { id: "book-a", kind: "book", type: "book" },
+    { id: "node-state", kind: "node", type: "concept" },
+    { id: "node-social", kind: "node", type: "concept" },
+    { id: "node-crisis", kind: "node", type: "question" },
+    { id: "node-exec", kind: "node", type: "concept" },
+    { id: "node-arist", kind: "node", type: "concept" },
+    { id: "node-loose", kind: "node", type: "claim" },
+  ];
+  const edges = [
+    { from: "book-a", to: "node-state" }, { from: "book-a", to: "node-social" }, { from: "book-a", to: "node-crisis" },
+    { from: "node-state", to: "node-exec" }, { from: "node-social", to: "node-arist" },
+  ];
+  const p = layeredLayout(cards, edges);
+  assert.equal(Object.keys(p).length, cards.length);
+  assert.ok(p["book-a"].y < p["node-state"].y, "the book is above its knowledge");
+  assert.equal(p["node-state"].y, p["node-crisis"].y, "direct knowledge shares a row");
+  assert.ok(p["node-exec"].y > p["node-state"].y, "second step in the next row");
+  assert.ok(p["node-loose"].y >= p["node-exec"].y, "unconnected cards go last");
+  // Children sit under their parents: exec under state, arist under social.
+  assert.equal(Math.sign(p["node-exec"].x - p["node-arist"].x), Math.sign(p["node-state"].x - p["node-social"].x));
+  const all = Object.entries(p);
+  for (const [a, pa] of all) for (const [b, pb] of all) {
+    if (a < b) assert.ok(!(Math.abs(pa.x - pb.x) < CARD_W && Math.abs(pa.y - pb.y) < CARD_H), `${a} overlaps ${b}`);
+  }
+  assert.deepEqual(layeredLayout(cards, edges), p, "deterministic");
+});
+
+test("a long row wraps instead of running off the canvas", async () => {
+  const { layeredLayout } = await jiti.import("./atlas-layout.ts");
+  const cards = [{ id: "book-a", kind: "book" }, ...Array.from({ length: 14 }, (_, i) => ({ id: `node-${String(i).padStart(2, "0")}`, kind: "node", type: "concept" }))];
+  const p = layeredLayout(cards, cards.slice(1).map((c) => ({ from: "book-a", to: c.id })));
+  const xs = Object.values(p).map((q) => q.x);
+  assert.ok(Math.max(...xs) - Math.min(...xs) < 7 * (CARD_W + 56), "at most six across");
+  assert.ok(new Set(cards.slice(1).map((c) => p[c.id].y)).size >= 3, "14 cards wrap into three rows");
+});

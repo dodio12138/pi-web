@@ -59,6 +59,7 @@ export function visibleText(message: { role?: string; content?: unknown }): stri
 
 const GUIDANCE = `This is a learning session connected to the user's book and knowledge library (Pi Book Atlas). Use the atlas_* tools:
 - Look before writing: atlas_get_context or atlas_search for the books, concepts and questions in play; atlas_read for an object's full text, relations and sources.
+- Record as you go: when a turn explains, settles or corrects knowledge worth keeping (a concept, claim, method, question, example, or what a book argues), end that turn with one atlas_apply_patch before your final words, citing source "$conversation" (it points at the user's question; no source_message_ids needed). Skip small talk, greetings and pure confirmations. The user should never have to ask for this.
 - Write with atlas_apply_patch. Prefer updating an existing node over creating one; a refused duplicate names the existing id to update. One node per knowledge point that can be explained, searched or applied on its own (concept, claim, method, skill, question, example). Small talk and confirmations make no node.
 - Every book card is placed precisely: one main 中图法 (CLC, 5th ed.) second-level class, e.g. classification {scheme_id:"clc", scheme_version:"5", codes:["D0"]} (≤2 more for books across fields), plus ${BOOK_CORE_TAGS.min}–${BOOK_CORE_TAGS.max} core tags for what the class cannot say (its topics, questions or methods). Revise both when the discussion shows the book better: update_book for the class, bind_tag/unbind_tag for the tags. An unknown code is refused with the classes to choose from.
 - Reuse existing tags (search first; a duplicate name or alias is refused with the existing id). Mark coverage honestly: core, discussed or mentioned.
@@ -140,6 +141,22 @@ export default function piBookAtlas(pi: ExtensionAPI) {
     const sessionId = ctx.sessionManager.getSessionId();
     const fresh = log.capture(sessionId, messages);
     log.markOrganized(sessionId, housekeeping, "atlas-organize-request");
+    // A turn the Agent recorded as it went (a patch citing $conversation at
+    // its question) is organized: the question and the replies after it.
+    const cited = new Set([...atlas().store.sources.values()]
+      .filter((source) => source.kind === "conversation" && source.locator?.session_id === sessionId && source.locator.message_id)
+      .map((source) => source.locator!.message_id!));
+    if (cited.size) {
+      const recorded: string[] = [];
+      let inRecordedTurn = false;
+      for (const message of messages) {
+        if (message.role === "user") inRecordedTurn = cited.has(message.entry_id);
+        if (inRecordedTurn) recorded.push(message.entry_id);
+      }
+      const organized = log.organizedIds(sessionId);
+      const todo = recorded.filter((id) => !organized.has(id));
+      if (todo.length) log.markOrganized(sessionId, todo, "atlas-recorded-in-turn");
+    }
     return fresh.length;
   };
 
@@ -150,6 +167,26 @@ export default function piBookAtlas(pi: ExtensionAPI) {
       if (entry.type === "message" && (entry.message as { role?: string }).role === "user") return entry.id;
     }
     return null;
+  };
+
+  const linkToSessionBook = (store: AtlasStore, sessionId: string, createdIds: string[]): string[] => {
+    const nodes = createdIds.filter((id) => id.startsWith("node-"));
+    if (!nodes.length) return [];
+    const { root } = atlas();
+    const link = bookOfSession(root, sessionId);
+    if (!link) return [];
+    const book = (link.book_id ? store.books.get(link.book_id) : undefined)
+      ?? [...store.books.values()].find((b) => !b.archived && normalizeLabel(b.title) === normalizeLabel(link.title));
+    if (!book || book.archived) return [];
+    if (link.book_id !== book.id) linkBookSession(root, { title: link.title, session_id: sessionId, book_id: book.id });
+    const tied = new Set(store.relationsOf(book.id).map((r) => (r.from_id === book.id ? r.to_id : r.from_id)));
+    const todo = nodes.filter((id) => !tied.has(id) && store.nodes.get(id));
+    if (!todo.length) return [];
+    const extra = store.applyPatch({
+      schema_version: 1,
+      operations: todo.map((id) => ({ op: "create_relation", fields: { from_id: book.id, to_id: id, type: "studied_in", attribution: "ai_synthesis", note: "在本书的会话中讨论" } })) as Operation[],
+    });
+    return extra.ok ? todo : [];
   };
 
   const json = (value: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }], details: value });
@@ -291,6 +328,12 @@ A refused patch writes nothing and says why: duplicates name the existing id, re
         ...(params.source_message_ids ? { source_message_ids: params.source_message_ids } : {}),
       };
       const result = store.applyPatch(request);
+      // In a book's own session, new knowledge joins that book's graph: a
+      // studied_in relation for each new node the patch did not tie to it.
+      if (result.ok) {
+        const linked = linkToSessionBook(store, sessionId, Object.values(result.created ?? {}));
+        if (linked.length) (result as typeof result & { linked_to_book?: string[] }).linked_to_book = linked;
+      }
       // The messages it came from are organized only once their knowledge is stored.
       if (result.ok && params.source_message_ids?.length) {
         try { capture(ctx); } catch { /* still marked below */ }

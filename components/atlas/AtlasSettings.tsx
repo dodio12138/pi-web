@@ -20,6 +20,10 @@ export interface AtlasSettingsState {
   autoEnable: boolean;
   exists: boolean;
   learning?: boolean | null;
+  /** The session runs in the library folder: it always reads, so there is nothing to switch. */
+  readingSession?: boolean;
+  /** Kept messages of this session not yet organized into the library. */
+  pending?: number;
 }
 
 export async function fetchAtlasSettings(sessionId?: string | null): Promise<AtlasSettingsState | null> {

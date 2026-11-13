@@ -138,7 +138,8 @@ test("$conversation cites this session's message, once per message; source_messa
   assert.equal(source.kind, "conversation");
   assert.deepEqual(source.locator, { session_id: "session-abc", message_id: u1 });
   assert.equal(source.granularity, "message");
-  assert.deepEqual(host.log().pending("session-abc").map((m) => m.role), ["assistant"]);
+  // Knowledge citing the question records the whole turn: the reply is not queued again.
+  assert.deepEqual(host.log().pending("session-abc").map((m) => m.role), []);
 
   const second = await host.tool("atlas_apply_patch", {
     operations: [{ op: "update_node", id: node.id, changes: { body: "补充", source_refs: ["$conversation"] } }],
@@ -356,4 +357,33 @@ test("/atlas guide makes the session the book's own: linked, and the prompt name
   const event = { messageType: "user", prompt: "第十三章讲什么", systemPromptOptions: { sections: {} } };
   await host.emit("before_agent_start", event);
   assert.match(event.systemPromptOptions.sections["pi-book-atlas"], new RegExp(`This session reads 《利维坦》 \\(${made.created.$b}\\)`));
+});
+
+test("a turn the Agent records as it goes is organized; in a book's session new nodes join the book", async (t) => {
+  const host = await fakePi(t);
+  await host.tool("atlas_apply_patch", { operations: [{ op: "create_book", fields: { title: "自然社会", authors: ["李猛"] } }] });
+  await host.command("guide 自然社会");
+  const book = core.findBookSession(host.root, { title: "自然社会" });
+  assert.ok(book.book_id);
+  await host.command("on");
+
+  const u1 = host.say("user", "第二章讲霍布斯的什么");
+  const result = await host.tool("atlas_apply_patch", { operations: [
+    { op: "create_node", ref: "$n", fields: { type: "concept", title: "被抛者的世界", attribution: "ai_synthesis", source_refs: ["$conversation"] } },
+  ] });
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.deepEqual(result.linked_to_book, [result.created.$n], "joined to the session's book");
+  const { store } = core.openAtlas(host.root);
+  assert.ok(store.relationsOf(book.book_id).some((r) => r.type === "studied_in" && r.to_id === result.created.$n));
+
+  const a1 = host.say("assistant", "李猛强调自然状态取消了共同的意义世界。");
+  const u2 = host.say("user", "那第三章呢");
+  await host.emit("agent_settled", {});
+  const pending = host.log().pending("session-abc").map((m) => m.entry_id);
+  assert.ok(!pending.includes(u1) && !pending.includes(a1), "the recorded turn is not queued again");
+  assert.ok(pending.includes(u2), "a turn not recorded still waits");
+
+  const event = { messageType: "user", prompt: "x", systemPromptOptions: { sections: {} } };
+  await host.emit("before_agent_start", event);
+  assert.match(event.systemPromptOptions.sections["pi-book-atlas"], /Record as you go/);
 });

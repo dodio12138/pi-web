@@ -7,7 +7,7 @@ export const NODE_TYPE_LABEL: Record<string, string> = {
 export const RELATION_LABEL: Record<string, string> = {
   defines: "定义", explains: "解释", supports: "支持", refutes: "反驳", qualifies: "限定", requires: "需要先懂",
   exemplifies: "举例", compares: "对比", applies_to: "应用于", related_to: "相关",
-  introduces: "提出", expounds: "阐述", adopts: "采用", criticizes: "批评", mentions: "提到", studied_in: "研读于",
+  introduces: "提出", expounds: "阐述", adopts: "采用", criticizes: "批评", mentions: "提到", studied_in: "研读",
 };
 export const ATTRIBUTION_LABEL: Record<string, string> = {
   author_claim: "作者观点", quoted: "引述", later_interpretation: "后人解读", ai_synthesis: "AI 概括",

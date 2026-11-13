@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { CARD_H, CARD_W, type Point } from "./atlas-layout";
-import { NODE_TYPE_LABEL, RELATION_LABEL, VERIFICATION_LABEL, type GraphCard, type GraphEdge } from "./atlas-client";
+import { ATTRIBUTION_LABEL, NODE_TYPE_LABEL, RELATION_LABEL, VERIFICATION_LABEL, type GraphCard, type GraphEdge } from "./atlas-client";
 
 // The node canvas: cards are HTML over an SVG layer of edges, all inside one
 // transformed plane. Drag the background to pan, the wheel to zoom, a card to
@@ -27,6 +27,22 @@ export function AtlasCanvas({ cards, edges, positions, selected, fresh, onSelect
   const host = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<View>({ x: 0, y: 0, k: 1 });
   const [drag, setDrag] = useState<{ id: string; p: Point } | null>(null);
+  // The card under the pointer: it and its neighbours stay lit, the rest fade.
+  const [hover, setHover] = useState<string | null>(null);
+  // Its details show after a short rest, so passing over cards stays quiet.
+  const [peek, setPeek] = useState<string | null>(null);
+  const peekTimer = useRef<number | null>(null);
+  const enterCard = (id: string) => {
+    setHover(id);
+    if (peekTimer.current) window.clearTimeout(peekTimer.current);
+    peekTimer.current = window.setTimeout(() => setPeek(id), 350);
+  };
+  const leaveCard = () => {
+    setHover(null);
+    setPeek(null);
+    if (peekTimer.current) window.clearTimeout(peekTimer.current);
+  };
+  useEffect(() => () => { if (peekTimer.current) window.clearTimeout(peekTimer.current); }, []);
   const [sizes, setSizes] = useState<Record<string, { w: number; h: number }>>({});
   const fitted = useRef(false);
   // Once the user pans or zooms, a resize no longer refits the view.
@@ -170,10 +186,34 @@ export function AtlasCanvas({ cards, edges, positions, selected, fresh, onSelect
     };
     const p1 = clip(a, b, sa);
     const p2 = clip(b, a, sb);
-    return { edge, p1, p2, mid: { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 } };
+    // A gentle arc, bent the same way every time for an edge, keeps crossing lines apart.
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    const len = Math.hypot(dx, dy) || 1;
+    let bend = 0;
+    for (let i = 0; i < edge.id.length; i += 1) bend = (bend * 31 + edge.id.charCodeAt(i)) % 997;
+    const k = (bend % 2 ? 1 : -1) * Math.min(60, len * 0.12);
+    const c = { x: (p1.x + p2.x) / 2 - (dy / len) * k, y: (p1.y + p2.y) / 2 + (dx / len) * k };
+    const mid = { x: 0.25 * p1.x + 0.5 * c.x + 0.25 * p2.x, y: 0.25 * p1.y + 0.5 * c.y + 0.25 * p2.y };
+    return { edge, p1, p2, c, mid };
   }).filter((x): x is NonNullable<typeof x> => Boolean(x)), [edges, posOf, sizes]);
 
   const selectedSet = new Set(selected);
+  // Focus: the hovered or selected cards and their neighbours stay lit, the rest fade back.
+  const focus = new Set([...selected, ...(hover ? [hover] : [])]);
+  const lit = new Set(focus);
+  for (const e of edges) {
+    if (focus.has(e.from)) lit.add(e.to);
+    if (focus.has(e.to)) lit.add(e.from);
+  }
+  const focused = focus.size > 0;
+  const edgeLit = (e: GraphEdge) => focus.has(e.from) || focus.has(e.to);
+  // Relation names: all of them while there are few lines, otherwise only the focused card's.
+  const showLabel = (e: GraphEdge) => (focused ? edgeLit(e) : edges.length <= 12);
+  const peekCard = peek && !drag ? cards.find((c) => c.id === peek) : undefined;
+  const peekPos = peekCard ? posOf(peekCard.id) : undefined;
+  const peekSize = peekCard ? sizes[peekCard.id] ?? { w: CARD_W, h: CARD_H } : undefined;
+  const degree = (id: string) => edges.filter((e) => e.from === id || e.to === id).length;
 
   return (
     <div ref={host} className="atlas-canvas" onPointerDown={onBackgroundDown}>
@@ -184,21 +224,21 @@ export function AtlasCanvas({ cards, edges, positions, selected, fresh, onSelect
               <path d="M0 0 L10 5 L0 10 z" fill="currentColor" />
             </marker>
           </defs>
-          {edgePaths.map(({ edge, p1, p2 }) => {
-            const active = selectedSet.has(edge.from) || selectedSet.has(edge.to);
+          {edgePaths.map(({ edge, p1, p2, c }) => {
+            const active = edgeLit(edge);
             const symmetric = edge.type === "related_to" || edge.type === "compares";
             return (
-              <line
+              <path
                 key={edge.id}
-                x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
-                className={`atlas-edge atlas-edge-${edge.type}${active ? " is-active" : ""}`}
+                d={`M ${p1.x} ${p1.y} Q ${c.x} ${c.y} ${p2.x} ${p2.y}`}
+                className={`atlas-edge atlas-edge-${edge.type}${active ? " is-active" : ""}${focused && !active ? " is-dim" : ""}`}
                 markerEnd={symmetric ? undefined : "url(#atlas-arrow)"}
               />
             );
           })}
         </svg>
-        {edgePaths.map(({ edge, mid }) => (
-          <div key={`l-${edge.id}`} className={`atlas-edge-label atlas-edge-${edge.type}`} style={{ left: mid.x, top: mid.y }} title={edge.note ?? undefined}>
+        {edgePaths.filter(({ edge }) => showLabel(edge)).map(({ edge, mid }) => (
+          <div key={`l-${edge.id}`} className={`atlas-edge-label atlas-edge-${edge.type}${edgeLit(edge) ? " is-active" : ""}`} style={{ left: mid.x, top: mid.y }} title={edge.note ?? undefined}>
             {RELATION_LABEL[edge.type] ?? edge.type}
           </div>
         ))}
@@ -209,10 +249,12 @@ export function AtlasCanvas({ cards, edges, positions, selected, fresh, onSelect
             <div
               key={card.id}
               ref={(el) => { if (el) cardEls.current.set(card.id, el); else cardEls.current.delete(card.id); }}
-              className={`atlas-card atlas-card-${card.type}${selectedSet.has(card.id) ? " is-selected" : ""}${fresh.has(card.id) ? " is-fresh" : ""}${drag?.id === card.id ? " is-dragging" : ""}`}
+              className={`atlas-card atlas-card-${card.type}${selectedSet.has(card.id) ? " is-selected" : ""}${fresh.has(card.id) ? " is-fresh" : ""}${drag?.id === card.id ? " is-dragging" : ""}${focused && !lit.has(card.id) ? " is-dim" : ""}`}
               style={{ left: p.x, top: p.y, width: CARD_W }}
               onPointerDown={(event) => onCardDown(event, card)}
               onDoubleClick={() => onExpand(card.id)}
+              onPointerEnter={() => enterCard(card.id)}
+              onPointerLeave={leaveCard}
               role="button"
               tabIndex={0}
               aria-pressed={selectedSet.has(card.id)}
@@ -234,6 +276,35 @@ export function AtlasCanvas({ cards, edges, positions, selected, fresh, onSelect
           );
         })}
       </div>
+      {peekCard && peekPos && peekSize && (
+        <div
+          className="atlas-peek"
+          role="tooltip"
+          style={(() => {
+            // Beside the card, on whichever side has room; never off the canvas.
+            const width = host.current?.clientWidth ?? 0;
+            const height = host.current?.clientHeight ?? 0;
+            const right = (peekPos.x + peekSize.w / 2) * view.k + view.x + 10;
+            const left = (peekPos.x - peekSize.w / 2) * view.k + view.x - 10 - 260;
+            const x = right + 260 <= width || left < 0 ? Math.min(right, Math.max(10, width - 270)) : left;
+            const y = Math.max(10, Math.min((peekPos.y - peekSize.h / 2) * view.k + view.y, height - 200));
+            return { left: x, top: y };
+          })()}
+        >
+          <div className="atlas-peek-head">
+            <span className="atlas-card-type">{NODE_TYPE_LABEL[peekCard.type] ?? peekCard.type}</span>
+            {peekCard.attribution && <span className="atlas-chip">{ATTRIBUTION_LABEL[peekCard.attribution] ?? peekCard.attribution}</span>}
+            {peekCard.kind === "node" && <span className="atlas-chip">{VERIFICATION_LABEL[peekCard.verification] ?? peekCard.verification}</span>}
+          </div>
+          <div className="atlas-peek-title">{peekCard.title}</div>
+          {peekCard.subtitle && <div className="atlas-card-sub">{peekCard.subtitle}</div>}
+          {peekCard.summary && <p className="atlas-peek-summary">{peekCard.summary}</p>}
+          {peekCard.tags.length > 0 && <div className="atlas-peek-tags">{peekCard.tags.map((t) => <span key={t} className="atlas-chip">{t}</span>)}</div>}
+          <div className="atlas-dim">
+            {degree(peekCard.id)} 条关系{peekCard.more > 0 ? `，还有 ${peekCard.more} 个相邻节点未展开` : ""} · 点击看全文
+          </div>
+        </div>
+      )}
       <div className="atlas-canvas-tools">
         <button type="button" onClick={() => zoomBy(1.25)} title="放大" aria-label="放大">+</button>
         <button type="button" onClick={() => zoomBy(0.8)} title="缩小" aria-label="缩小">−</button>

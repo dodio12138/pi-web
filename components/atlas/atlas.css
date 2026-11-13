@@ -143,3 +143,18 @@ line.atlas-edge-related_to, line.atlas-edge-mentions { stroke-dasharray: 4 4; }
 .atlas-pop-check { display: flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: 11.5px; }
 .atlas-btn.is-disabled { opacity: 0.5; pointer-events: none; }
 a.atlas-btn { text-decoration: none; }
+
+/* Focus: what the hovered or selected card touches stays lit */
+.atlas-card { transition: opacity 0.15s; }
+.atlas-card.is-dim { opacity: 0.28; }
+.atlas-edge { transition: opacity 0.15s; }
+.atlas-edge.is-dim { opacity: 0.12; }
+.atlas-edge-label.is-active { color: var(--text); font-weight: 600; z-index: 1; }
+
+/* Hover card */
+.atlas-peek { position: absolute; z-index: 6; width: 260px; max-width: calc(100% - 20px); padding: 10px 12px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 8px 24px rgb(0 0 0 / 0.22); pointer-events: none; display: flex; flex-direction: column; gap: 5px; font-size: 12px; line-height: 1.55; }
+.atlas-peek-head { display: flex; align-items: center; gap: 5px; }
+.atlas-peek-title { font-weight: 600; font-size: 13px; }
+.atlas-peek-summary { margin: 0; color: var(--text-muted); white-space: pre-wrap; }
+.atlas-peek-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.atlas-reading { color: var(--accent); border-color: var(--accent); height: 22px; }

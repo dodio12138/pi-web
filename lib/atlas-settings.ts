@@ -4,7 +4,7 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { resolveAtlasRoot, type AtlasSettings } from "@/packages/pi-book-atlas/src/root";
 import { getGlobalSettingsPath, readGlobalSettings, updateGlobalSettings } from "./global-settings-file";
 import { invalidateModelRuntimeWithExtensions } from "./model-runtime";
-import { getSessionEntries, resolveSessionPath } from "./session-reader";
+import { getSessionEntries, readSessionHeader, resolveSessionPath } from "./session-reader";
 
 // Pi Book Atlas from Settings (fork only): turn the bundled extension on or
 // off, choose the library folder and whether every session learns, without
@@ -135,9 +135,21 @@ export async function updateAtlasSettings(input: AtlasSettingsChange): Promise<A
  * Whether a session is a learning session, the way the extension decides it:
  * the last /atlas on|off in the session, else the autoEnable setting.
  */
-export async function sessionLearning(sessionId: string, autoEnable: boolean): Promise<boolean | null> {
+/** Whether a session reads, and why: a session in the library folder always does; otherwise its last /atlas on|off, else the default. */
+export async function sessionLearningState(sessionId: string, autoEnable: boolean, root?: string): Promise<{ learning: boolean | null; fixed: boolean }> {
+  const path = await resolveSessionPath(sessionId);
+  if (!path) return { learning: null, fixed: false };
+  const cwd = readSessionHeader(path)?.cwd;
+  if (root && cwd && (resolve(cwd) === resolve(root) || resolve(cwd).startsWith(`${resolve(root)}/`))) return { learning: true, fixed: true };
+  return { learning: await sessionLearning(sessionId, autoEnable), fixed: false };
+}
+
+export async function sessionLearning(sessionId: string, autoEnable: boolean, root?: string): Promise<boolean | null> {
   const path = await resolveSessionPath(sessionId);
   if (!path) return null;
+  // A session started in the library folder always learns.
+  const cwd = readSessionHeader(path)?.cwd;
+  if (root && cwd && (resolve(cwd) === resolve(root) || resolve(cwd).startsWith(`${resolve(root)}/`))) return true;
   let state: boolean | null = null;
   for (const entry of getSessionEntries(path) as unknown as { type: string; customType?: string; data?: { enabled?: boolean } }[]) {
     if (entry.type === "custom" && entry.customType === MODE_ENTRY) state = Boolean(entry.data?.enabled);
