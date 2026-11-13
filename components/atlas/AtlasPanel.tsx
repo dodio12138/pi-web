@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AtlasCanvas } from "./AtlasCanvas";
 import { AtlasDetail } from "./AtlasDetail";
-import { layeredLayout, placeCards, type Point } from "./atlas-layout";
+import { layeredLayout, placeCards, structureLayout, type Point } from "./atlas-layout";
 import { askText, atlasApi, type AtlasGraph, type AtlasOverview, type GraphView } from "./atlas-client";
 import { fetchAtlasSettings, saveAtlasSettings, type AtlasSettingsState } from "./AtlasSettings";
 import "./atlas.css";
@@ -49,6 +49,8 @@ export function AtlasPanel({ active, sessionId, onInsert, onSend, onOpenBook, on
   const [selected, setSelected] = useState<string[]>([]);
   const [fresh, setFresh] = useState<Set<string>>(new Set());
   const [showBooks, setShowBooks] = useState(true);
+  // A book with a table of contents is shown along it; "自由排列" goes back to the free canvas.
+  const [structureMode, setStructureMode] = useState(true);
   // In a narrow panel the books column floats over the canvas: closed until asked for.
   const panelRef = useRef<HTMLDivElement>(null);
   const [narrow, setNarrow] = useState(false);
@@ -69,15 +71,16 @@ export function AtlasPanel({ active, sessionId, onInsert, onSend, onOpenBook, on
   // Remember the view and book between visits.
   useEffect(() => {
     try {
-      const saved = JSON.parse(window.localStorage.getItem(PREFS_KEY) ?? "{}") as { view?: GraphView; bookId?: string; showBooks?: boolean };
+      const saved = JSON.parse(window.localStorage.getItem(PREFS_KEY) ?? "{}") as { view?: GraphView; bookId?: string; showBooks?: boolean; structureMode?: boolean };
+      if (typeof saved.structureMode === "boolean") setStructureMode(saved.structureMode);
       if (saved.view) setView(saved.view);
       if (saved.bookId) setBookId(saved.bookId);
       if (typeof saved.showBooks === "boolean") setShowBooks(saved.showBooks);
     } catch { /* optional */ }
   }, []);
   useEffect(() => {
-    try { window.localStorage.setItem(PREFS_KEY, JSON.stringify({ view, bookId, showBooks })); } catch { /* optional */ }
-  }, [view, bookId, showBooks]);
+    try { window.localStorage.setItem(PREFS_KEY, JSON.stringify({ view, bookId, showBooks, structureMode })); } catch { /* optional */ }
+  }, [view, bookId, showBooks, structureMode]);
 
   const loadOverview = useCallback(async () => {
     try {
@@ -262,6 +265,14 @@ export function AtlasPanel({ active, sessionId, onInsert, onSend, onOpenBook, on
     if (id) select([id]);
   };
 
+  // The spine: computed from the table of contents every time, never saved.
+  const spine = useMemo(() => {
+    if (!graph?.outline || view !== "book" || !structureMode) return null;
+    return { ...structureLayout(graph.outline.columns, graph.cards, graph.outline.book_id), bookId: graph.outline.book_id };
+  }, [graph, view, structureMode]);
+  const spineBookId = spine?.bookId;
+  const hideSpineEdge = useCallback((edge: { from: string; to: string }) => edge.from === spineBookId || edge.to === spineBookId, [spineBookId]);
+
   const books = (overview?.books ?? []).filter((b) => !bookFilter.trim() || `${b.title} ${b.authors.join(" ")} ${b.classes.join(" ")} ${b.tags.join(" ")}`.toLowerCase().includes(bookFilter.trim().toLowerCase()));
   const currentBook = overview?.books?.find((b) => b.id === bookId);
   const detailId = selected.length === 1 ? selected[0] : null;
@@ -413,10 +424,29 @@ export function AtlasPanel({ active, sessionId, onInsert, onSend, onOpenBook, on
               {view === "book" && currentBook && (
                 <div className="atlas-crumb">《{currentBook.title}》{currentBook.classes.length > 0 && <span className="atlas-dim"> · {currentBook.classes.join("；")}</span>}</div>
               )}
+              {view === "book" && graph.outline && (
+                <div className="atlas-spine-bar">
+                  <div className="atlas-seg" role="tablist" aria-label="排列">
+                    <button type="button" className={structureMode ? "is-on" : ""} onClick={() => setStructureMode(true)}>按目录</button>
+                    <button type="button" className={!structureMode ? "is-on" : ""} onClick={() => setStructureMode(false)}>自由排列</button>
+                  </div>
+                  <span className="atlas-dim">目录来源：{({ user: "你提供", web: "网上查到", model: "模型回忆·待核实" } as Record<string, string>)[graph.outline.source] ?? graph.outline.source}</span>
+                </div>
+              )}
+              {view === "book" && !graph.outline && currentBook && (
+                <div className="atlas-spine-bar">
+                  <span className="atlas-dim">这本书还没有目录，图只能按关系排列。</span>
+                  {onOpenBook && <button type="button" className="atlas-btn" onClick={() => void onOpenBook({ id: currentBook.id, title: currentBook.title }).then((problem) => setStatus(problem ?? ""))}>在本书会话里补目录</button>}
+                </div>
+              )}
               <AtlasCanvas
+                key={spine ? `spine:${graph.key}` : `free:${graph.key}`}
                 cards={graph.cards}
                 edges={graph.edges}
-                positions={positions}
+                positions={spine ? spine.positions : positions}
+                frames={spine?.frames ?? null}
+                locked={Boolean(spine)}
+                hideEdge={spine ? hideSpineEdge : undefined}
                 selected={selected}
                 fresh={fresh}
                 onSelect={select}

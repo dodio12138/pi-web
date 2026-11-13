@@ -67,6 +67,28 @@ export interface TagBinding {
   reason?: string;
 }
 
+/** Where a book's table of contents came from: typed or pasted by the user, found on the web, or recalled by the model (unchecked). */
+export const OUTLINE_SOURCES = ["user", "web", "model"] as const;
+export type OutlineSource = (typeof OUTLINE_SOURCES)[number];
+export const OUTLINE_LEVELS = ["part", "chapter", "section"] as const;
+export type OutlineLevel = (typeof OUTLINE_LEVELS)[number];
+
+/** One entry of a table of contents, in reading order. `id` is short and stable ("p1", "c2", "s12") so knowledge can point at it. */
+export interface OutlineItem {
+  id: string;
+  title: string;
+  level: OutlineLevel;
+  /** The part a chapter is in, the chapter a section is in; null at the top. */
+  parent: string | null;
+}
+
+export interface BookOutline {
+  source: OutlineSource;
+  /** What the source was, e.g. "用户贴的目录" or a URL. */
+  note?: string;
+  items: OutlineItem[];
+}
+
 export interface Book extends Common {
   title: string;
   authors: string[];
@@ -77,6 +99,8 @@ export interface Book extends Common {
   classification: { scheme_id: string | null; scheme_version: string | null; codes: string[] };
   tag_bindings: TagBinding[];
   entry_questions: string[];
+  /** The table of contents: the spine of the book's graph. Absent until someone supplies it. */
+  outline?: BookOutline | null;
   /** The workbench's descriptive attributes, kept as they were (§6.2, §13). */
   description_profile?: Record<string, unknown>;
   archived?: boolean;
@@ -251,6 +275,35 @@ function tagBindings(obj: Record<string, unknown>, problems: Problem[]) {
   });
 }
 
+const OUTLINE_ID = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,23}$/;
+const PARENT_LEVEL: Record<OutlineLevel, OutlineLevel[]> = { part: [], chapter: ["part"], section: ["chapter", "part"] };
+
+function outlineProblems(outline: unknown, problems: Problem[]) {
+  if (!isRecord(outline)) { problems.push({ path: "outline", message: "must be { source, items[] } or null" }); return; }
+  if (!(OUTLINE_SOURCES as readonly unknown[]).includes(outline.source)) problems.push({ path: "outline.source", message: `must be one of ${OUTLINE_SOURCES.join(", ")}` });
+  if (outline.note !== undefined && typeof outline.note !== "string") problems.push({ path: "outline.note", message: "must be a string" });
+  if (!Array.isArray(outline.items)) { problems.push({ path: "outline.items", message: "must be a list" }); return; }
+  const seen = new Map<string, OutlineLevel>();
+  outline.items.forEach((item, i) => {
+    const at = `outline.items[${i}]`;
+    if (!isRecord(item)) { problems.push({ path: at, message: "must be { id, title, level, parent }" }); return; }
+    const id = item.id;
+    if (typeof id !== "string" || !OUTLINE_ID.test(id)) problems.push({ path: `${at}.id`, message: 'a short id: letters, digits, "-", "_" or "." (e.g. "c2")' });
+    else if (seen.has(id)) problems.push({ path: `${at}.id`, message: `"${id}" is used twice` });
+    if (typeof item.title !== "string" || !item.title.trim()) problems.push({ path: `${at}.title`, message: "must not be empty" });
+    const level = item.level as OutlineLevel;
+    if (!(OUTLINE_LEVELS as readonly unknown[]).includes(level)) problems.push({ path: `${at}.level`, message: `must be one of ${OUTLINE_LEVELS.join(", ")}` });
+    const parent = item.parent ?? null;
+    if (parent !== null) {
+      // Parents come first, in reading order, and a chapter sits in a part, a section in a chapter (or a part).
+      const parentLevel = typeof parent === "string" ? seen.get(parent) : undefined;
+      if (!parentLevel) problems.push({ path: `${at}.parent`, message: `"${String(parent)}" is not an earlier entry` });
+      else if (PARENT_LEVEL[level] && !PARENT_LEVEL[level].includes(parentLevel)) problems.push({ path: `${at}.parent`, message: `a ${level} cannot sit in a ${parentLevel}` });
+    }
+    if (typeof id === "string" && (OUTLINE_LEVELS as readonly unknown[]).includes(level)) seen.set(id, level);
+  });
+}
+
 const VALIDATORS: Record<ObjectKind, (obj: Record<string, unknown>, problems: Problem[]) => void> = {
   book(obj, problems) {
     common(obj, "book", problems);
@@ -278,6 +331,7 @@ const VALIDATORS: Record<ObjectKind, (obj: Record<string, unknown>, problems: Pr
     }
     tagBindings(obj, problems);
     strList(obj, "entry_questions", problems);
+    if (obj.outline != null) outlineProblems(obj.outline, problems);
     if (obj.description_profile !== undefined && !isRecord(obj.description_profile)) problems.push({ path: "description_profile", message: "must be an object" });
     if (typeof obj.body !== "string") problems.push({ path: "body", message: "must be a string" });
   },

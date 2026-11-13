@@ -35,10 +35,16 @@ export interface AtlasOverview {
 export interface GraphCard {
   id: string; kind: "book" | "node"; type: string; title: string; summary: string; tags: string[];
   verification: string; attribution: string | null; subtitle: string; revision: number; updated_at: string; more: number;
+  /** In a book's view with a table of contents: the chapter it comes from (null: a supplement) and the exact entry. */
+  chapter?: string | null; place?: string | null;
+}
+export interface GraphSpine {
+  book_id: string; source: string; note: string | null;
+  columns: { id: string | null; title: string | null; chapters: { id: string; title: string; sections: { id: string; title: string }[] }[] }[];
 }
 export interface GraphEdge { id: string; from: string; to: string; type: string; attribution: string; note: string | null }
 export interface AtlasGraph {
-  key: string; cards: GraphCard[]; edges: GraphEdge[]; truncated: boolean; revision: number;
+  key: string; outline?: GraphSpine | null; cards: GraphCard[]; edges: GraphEdge[]; truncated: boolean; revision: number;
   positions: Record<string, { x: number; y: number }>; hidden: string[];
 }
 export interface ObjectView {

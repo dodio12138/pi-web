@@ -4,6 +4,7 @@
 // at a time (§4).
 
 import { clcLabel, CLC_SCHEME } from "./clc";
+import { chapterOf, outlineColumns, outlineItem, type OutlineColumn } from "./outline";
 import { search } from "./search";
 import type { AtlasStore } from "./store";
 import { resolveTag } from "./tags";
@@ -43,6 +44,9 @@ export interface GraphCard {
   updated_at: string;
   /** Neighbours not on the canvas: something to expand. */
   more: number;
+  /** In a book's view: the chapter of its table of contents this knowledge comes from, and the exact entry. Null: a supplement. */
+  chapter?: string | null;
+  place?: string | null;
 }
 
 export interface GraphEdge {
@@ -54,8 +58,17 @@ export interface GraphEdge {
   note: string | null;
 }
 
+export interface GraphOutline {
+  book_id: string;
+  source: string;
+  note: string | null;
+  columns: OutlineColumn[];
+}
+
 export interface Graph {
   key: string;
+  /** In a book's view, when the book has a table of contents: the spine. */
+  outline?: GraphOutline | null;
   cards: GraphCard[];
   edges: GraphEdge[];
   truncated: boolean;
@@ -175,7 +188,21 @@ export function buildGraph(store: AtlasStore, request: GraphRequest): Graph {
     };
   });
 
-  return { key: graphKey(request), cards, edges, truncated, revision: store.meta.workspace_revision };
+  // A book's view with a table of contents: each piece of knowledge is placed
+  // at the entry its relation to the book names (scope = an outline id).
+  let outline: GraphOutline | null = null;
+  const book = request.view === "book" && request.book_id ? store.books.get(request.book_id) : undefined;
+  if (book?.outline?.items.length) {
+    outline = { book_id: book.id, source: book.outline.source, note: book.outline.note ?? null, columns: outlineColumns(book.outline) };
+    for (const card of cards) {
+      if (card.kind !== "node") continue;
+      const scoped = store.relationsOf(card.id).find((r) => (r.from_id === book.id || r.to_id === book.id) && outlineItem(book.outline, r.scope));
+      card.place = scoped?.scope ?? null;
+      card.chapter = chapterOf(book.outline, scoped?.scope);
+    }
+  }
+
+  return { key: graphKey(request), outline, cards, edges, truncated, revision: store.meta.workspace_revision };
 }
 
 /** The books, for the books bar: title, authors, main class, core tags, how much knowledge. */

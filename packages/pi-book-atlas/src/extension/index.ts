@@ -15,6 +15,7 @@ import {
   linkBookSession,
   normalizeLabel,
   openAtlas,
+  outlinePrompt,
   BOOK_CORE_TAGS,
   clcLabel,
   clcPrompt,
@@ -40,6 +41,8 @@ const ORGANIZE_HEADER = "整理本次讨论进知识库（Pi Book Atlas）。";
 /** First line of the request /atlas guide sends: that run writes the book card itself. */
 const GUIDE_HEADER = "用读书透镜带我过一遍这本书（Pi Book Atlas）：";
 const SECTION = "pi-book-atlas";
+/** What to do while a book has no table of contents: get it before anything else, never make one up. */
+const OUTLINE_REQUEST = `This book has no table of contents in the library yet. Get it before going deeper, in this order: ask the user to paste it (the best source); if you have web tools, look it up and say where you found it; only if neither works, give the one you recall, marked as unchecked. Never invent chapter titles; leave out what you do not know. Save it with update_book changes {outline: {source: "user"|"web"|"model", note: "where it came from", items: [{id: "p1", title: "上篇 …", level: "part", parent: null}, {id: "c1", title: "第一章 …", level: "chapter", parent: "p1"}, {id: "s1", title: "…", level: "section", parent: "c1"}]}} in reading order (parents first; chapters outside any part have parent null). Short ids: p1, c1, s1…`;
 
 type Settings = AtlasSettings;
 
@@ -63,6 +66,7 @@ const GUIDANCE = `This is a learning session connected to the user's book and kn
 - Write with atlas_apply_patch. Prefer updating an existing node over creating one; a refused duplicate names the existing id to update. One node per knowledge point that can be explained, searched or applied on its own (concept, claim, method, skill, question, example). Small talk and confirmations make no node.
 - Every book card is placed precisely: one main 中图法 (CLC, 5th ed.) second-level class, e.g. classification {scheme_id:"clc", scheme_version:"5", codes:["D0"]} (≤2 more for books across fields), plus ${BOOK_CORE_TAGS.min}–${BOOK_CORE_TAGS.max} core tags for what the class cannot say (its topics, questions or methods). Revise both when the discussion shows the book better: update_book for the class, bind_tag/unbind_tag for the tags. An unknown code is refused with the classes to choose from.
 - Reuse existing tags (search first; a duplicate name or alias is refused with the existing id). Mark coverage honestly: core, discussed or mentioned.
+- A book's knowledge has a place: its table of contents (the card's outline) is the spine of the book's graph. When knowledge comes from a part of the book, give the relation from the book to it (expounds, introduces, criticizes…) a scope that is the outline entry's id (a section's id when known, else the chapter's). Background, comparisons with other books and reading advice get no scope: they show around the book as supplements. Never invent outline entries.
 - Relations say what they mean: supports, refutes, qualifies, requires, explains… use related_to only when nothing more precise holds. A challenge to a view is a new refutes/qualifies relation, not an overwrite.
 - Attribution and evidence: your own explanations are ai_synthesis with verification pending; author_claim only with a source that shows it. Never invent quotations, page numbers or chapter locations: without the text, give a paraphrase and mark it unverified.
 - The library's files (books/, nodes/, *.json, conversations/) change only through atlas_apply_patch: never write, move or delete them with file tools, even when this session runs in the library folder.
@@ -189,6 +193,17 @@ export default function piBookAtlas(pi: ExtensionAPI) {
     return extra.ok ? todo : [];
   };
 
+  /** What a book's own session is told: which book, and its table of contents, or to get one first. */
+  const bookSessionNote = (store: AtlasStore | null, link: { title: string; book_id?: string }): string => {
+    const card = link.book_id ? store?.books.get(link.book_id) : undefined;
+    const head = `This session reads 《${link.title}》${link.book_id ? ` (${link.book_id})` : ""}: a question that names no other book is about it, and what is learned here belongs to its card.`;
+    if (card?.outline?.items.length) {
+      const unchecked = card.outline.source === "model" ? " It was recalled, not checked: when the user shows the real one, replace it (source \"user\")." : "";
+      return `${head}\n${outlinePrompt(card.outline)}\nScope knowledge from the book with these ids.${unchecked}`;
+    }
+    return `${head}\n${OUTLINE_REQUEST}`;
+  };
+
   const json = (value: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }], details: value });
 
   // ---- capture -----------------------------------------------------------
@@ -214,7 +229,7 @@ export default function piBookAtlas(pi: ExtensionAPI) {
     let section = guidanceWithHints(store, event.messageType === "user" ? event.prompt : undefined);
     // A book's own session: questions are about that book unless another is named.
     const book = root ? bookOfSession(root, ctx.sessionManager.getSessionId()) : null;
-    if (book) section += `\n\nThis session reads 《${book.title}》${book.book_id ? ` (${book.book_id})` : ""}: a question that names no other book is about it, and what is learned here belongs to its card.`;
+    if (book) section += `\n\n${bookSessionNote(store, book)}`;
     event.systemPromptOptions.sections[SECTION] = section;
   });
 
@@ -277,10 +292,10 @@ export default function piBookAtlas(pi: ExtensionAPI) {
     name: "atlas_apply_patch",
     label: "Atlas update",
     description: `Change the knowledge library in one all-or-nothing patch. Operations (each an object with "op"):
-create_book {ref?, fields:{title, authors?, published_year? (first publication, negative for BCE; omit when unsure), classification?: {scheme_id: "clc", scheme_version: "5", codes: [main 中图法 second-level class, ≤2 others]}, entry_questions?, tag_bindings?, source_refs?, body?}} · update_book {id, changes}
+create_book {ref?, fields:{title, authors?, published_year? (first publication, negative for BCE; omit when unsure), classification?: {scheme_id: "clc", scheme_version: "5", codes: [main 中图法 second-level class, ≤2 others]}, entry_questions?, outline?: {source: user|web|model, note?, items: [{id, title, level: part|chapter|section, parent}]}, tag_bindings?, source_refs?, body?}} · update_book {id, changes}
 create_node {ref?, fields:{type: concept|claim|method|skill|question|example, title, summary?, aliases?, body?, attribution, tag_bindings?, source_refs?}} · update_node {id, changes}
 create_tag {ref?, fields:{type: domain|topic|question|method, name, definition?, aliases?, parent_ids?}} · update_tag {id, changes} · merge_tags {from_ids, into_id}
-create_relation {ref?, fields:{from_id, to_id, type, attribution, scope?, note?, source_refs?}} · update_relation {id, changes}
+create_relation {ref?, fields:{from_id, to_id, type, attribution, scope? (from a book: the outline entry id it comes from), note?, source_refs?}} · update_relation {id, changes}
 create_source {ref?, fields:{kind, title, url?, granularity, locator?}} · bind_tag {target_id, binding:{tag_id, coverage: core|discussed|mentioned, assigned_by: human|source_checked|ai_inference, reason?}} · unbind_tag {target_id, tag_id} · archive {id} · restore {id}
 Name new objects with ref "$name" and refer to them as "$name" later in the same patch. "$conversation" is a source for this conversation, created when used.
 Relation types: defines explains supports refutes qualifies requires exemplifies compares applies_to related_to; from a book: introduces expounds adopts criticizes mentions studied_in.
@@ -418,12 +433,18 @@ A refused patch writes nothing and says why: duplicates name the existing id, re
               const tags = book.tag_bindings.filter((b) => b.coverage === "core").map((b) => store.tags.get(b.tag_id)?.name ?? b.tag_id);
               return [`《${book.title}》现在的分类：${classes.join("；") || "无"}；core 标签：${tags.join("、") || "无"}。`];
             });
+            const card = exact ? store.books.get(exact.id) : undefined;
+            const outlineStep = card?.outline?.items.length
+              ? `第一步，目录：书卡上已有目录（来源：${{ user: "我提供的", web: "网上查到的", model: "模型回忆、未核实" }[card.outline.source]}）。按目录来讲，下面每个透镜尽量落到具体的篇章。`
+              : "第一步，目录：这本书还没有目录。先问我要目录；你能联网就去查，并说明出处；都不行才凭记忆给出，标为未核实（source \"model\"）。不要编造章节名，不知道的就空着。拿到后用 update_book 写进 outline（格式见规则）。有了目录再往下走透镜。";
             pi.sendUserMessage([
               `${GUIDE_HEADER}《${title}》`,
               known.length
                 ? `知识库里可能已有这本书：${known.map((h) => `${h.title}（${h.id}）`).join("、")}。先用 atlas_read 读它的索引卡，在原有内容上补充，不要另建一张。`
                 : "知识库里还没有这本书：先用 atlas_search 确认，确实没有再用 create_book 建索引卡（书名、作者；不确定的元信息留空）。",
               ...current,
+              "",
+              outlineStep,
               "",
               readingLensPrompt({ options: true }),
               "",
@@ -432,6 +453,7 @@ A refused patch writes nothing and says why: duplicates name the existing id, re
               "逐个透镜说说你对这本书的理解，用我能看懂的话，每个透镜两三句。说完用一个 atlas_apply_patch 写进书的索引卡：",
               `- 正文追加（或更新已有的）下面这一节，括号里的问题换成你的回答，答不出的透镜保留问题、写「待讨论」：\n\n${readingLensTemplate()}`,
               "- 「核心问题」里的问题同时写进 entry_questions；值得单独讨论的写成 question 节点并用关系连到书。",
+              "- 新建的知识节点，用书到节点的关系（expounds 等）连上，scope 写它出自的目录条目 id；只是背景或补充的不写 scope。",
               `- 分类：classification 设为 {scheme_id:"clc", scheme_version:"5", codes:[主类, …]}，一个中图法二级主类在前，跨领域的书最多再加两个；另外用 ${BOOK_CORE_TAGS.min}–${BOOK_CORE_TAGS.max} 个 core 标签补充类目说不清的主题、问题或方法（先查已有标签再新建，用词要准、短）。已有分类和标签就核对，不合适的改掉、解绑。`,
               "- 归属用 ai_synthesis、核验状态 pending，来源引用 \"$conversation\"；这是你的概括，不是作者原话。",
               "不要编造原文引文、页码或章节；对这本书了解不够就直说，留给我们之后一起读。最后问我想从哪个透镜深入。",

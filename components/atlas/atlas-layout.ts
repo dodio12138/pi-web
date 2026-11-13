@@ -185,3 +185,107 @@ export function layeredLayout(cards: LayeredCard[], edges: LayoutEdge[]): Record
   }
   return out;
 }
+
+// ---- Structure layout: the book's table of contents as the spine ----------
+
+export interface SpineColumn {
+  id: string | null;
+  title: string | null;
+  chapters: { id: string; title: string; sections: { id: string; title: string }[] }[];
+}
+
+export interface StructureCard extends LayeredCard { chapter?: string | null }
+
+export interface StructureFrames {
+  parts: { id: string; title: string; x: number; y: number; w: number; h: number }[];
+  chapters: { id: string; title: string; sections: { id: string; title: string }[]; x: number; y: number; w: number; h: number }[];
+  /** Reading-order arrows: book to each column, chapter to chapter down a column's left edge. */
+  arrows: { x1: number; y1: number; x2: number; y2: number }[];
+  /** The band around the spine where supplements sit. */
+  outer: { x: number; y: number; w: number; h: number } | null;
+}
+
+const INDENT = 26;
+const CARD_GAP = 16;
+export const SPINE_COLUMN_W = INDENT + 2 * CARD_W + CARD_GAP;
+const SPINE_COLUMN_GAP = 72;
+const ROW_STEP = CARD_H + 32;
+const SECTION_LINE = 17;
+const SECTIONS_SHOWN = 3;
+
+/**
+ * Book on top; one column per part (chapters outside parts get their own),
+ * chapter boxes down each column in reading order with the knowledge from that
+ * chapter under its box, two across; knowledge from no chapter (background,
+ * comparisons, the Agent's supplements) in a band below the spine.
+ */
+export function structureLayout(columns: SpineColumn[], cards: StructureCard[], bookId: string): { positions: Record<string, Point>; frames: StructureFrames } {
+  const positions: Record<string, Point> = {};
+  const frames: StructureFrames = { parts: [], chapters: [], arrows: [], outer: null };
+  const chapterIds = new Set(columns.flatMap((c) => c.chapters.map((ch) => ch.id)));
+  const byChapter = new Map<string, StructureCard[]>();
+  const outer: StructureCard[] = [];
+  for (const card of cards) {
+    if (card.id === bookId) continue;
+    if (card.kind === "node" && card.chapter && chapterIds.has(card.chapter)) (byChapter.get(card.chapter) ?? byChapter.set(card.chapter, []).get(card.chapter)!).push(card);
+    else outer.push(card);
+  }
+  const typeRank = (c: StructureCard) => TYPE_ORDER[c.type ?? "concept"] ?? 9;
+  for (const list of byChapter.values()) list.sort((a, b) => typeRank(a) - typeRank(b) || a.id.localeCompare(b.id));
+
+  const bookY = 0;
+  positions[bookId] = { x: 0, y: bookY };
+  const top = bookY + CARD_H / 2 + 70;
+  const n = columns.length;
+  let bottom = top;
+  columns.forEach((column, i) => {
+    const cx = (i - (n - 1) / 2) * (SPINE_COLUMN_W + SPINE_COLUMN_GAP);
+    const left = cx - SPINE_COLUMN_W / 2;
+    let y = top;
+    if (column.id) {
+      frames.parts.push({ id: column.id, title: column.title ?? "", x: left, y, w: SPINE_COLUMN_W, h: 40 });
+      frames.arrows.push({ x1: 0, y1: bookY + CARD_H / 2 + 6, x2: cx, y2: y - 4 });
+      y += 40 + 22;
+    } else {
+      frames.arrows.push({ x1: 0, y1: bookY + CARD_H / 2 + 6, x2: cx, y2: y - 4 });
+    }
+    column.chapters.forEach((chapter, k) => {
+      const shown = Math.min(chapter.sections.length, SECTIONS_SHOWN);
+      const more = chapter.sections.length > SECTIONS_SHOWN ? 1 : 0;
+      const h = 38 + (shown + more) * SECTION_LINE + (shown + more ? 6 : 0);
+      if (k > 0 || column.id) {
+        // From the previous box (or the part) down the column's left edge.
+        const prevBottom = k > 0 ? frames.chapters[frames.chapters.length - 1] : frames.parts[frames.parts.length - 1];
+        frames.arrows.push({ x1: left + INDENT / 2, y1: prevBottom.y + prevBottom.h, x2: left + INDENT / 2, y2: y - 2 });
+      }
+      frames.chapters.push({ id: chapter.id, title: chapter.title, sections: chapter.sections, x: left, y, w: SPINE_COLUMN_W, h });
+      y += h + 22;
+      const list = byChapter.get(chapter.id) ?? [];
+      list.forEach((card, j) => {
+        const row = Math.floor(j / 2);
+        const alone = j === list.length - 1 && list.length % 2 === 1;
+        const x = alone ? left + INDENT + (2 * CARD_W + CARD_GAP) / 2 : left + INDENT + CARD_W / 2 + (j % 2) * (CARD_W + CARD_GAP);
+        positions[card.id] = { x: Math.round(x), y: Math.round(y + CARD_H / 2 + row * ROW_STEP) };
+      });
+      if (list.length) y += Math.ceil(list.length / 2) * ROW_STEP;
+      y += 26;
+    });
+    bottom = Math.max(bottom, y);
+  });
+
+  if (outer.length) {
+    const width = Math.max(n * SPINE_COLUMN_W + (n - 1) * SPINE_COLUMN_GAP, 3 * (CARD_W + CARD_GAP));
+    const perRow = Math.max(1, Math.floor((width - 2 * 24 + CARD_GAP) / (CARD_W + CARD_GAP)));
+    const y0 = bottom + 70;
+    const rows = Math.ceil(outer.length / perRow);
+    outer.sort((a, b) => typeRank(a) - typeRank(b) || a.id.localeCompare(b.id));
+    outer.forEach((card, j) => {
+      const row = Math.floor(j / perRow);
+      const inRow = Math.min(perRow, outer.length - row * perRow);
+      const k = j - row * perRow;
+      positions[card.id] = { x: Math.round((k - (inRow - 1) / 2) * (CARD_W + CARD_GAP)), y: Math.round(y0 + 40 + CARD_H / 2 + row * ROW_STEP) };
+    });
+    frames.outer = { x: -width / 2, y: y0, w: width, h: 40 + rows * ROW_STEP + 8 };
+  }
+  return { positions, frames };
+}

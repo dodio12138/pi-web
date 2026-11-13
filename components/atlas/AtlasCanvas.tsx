@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { CARD_H, CARD_W, type Point } from "./atlas-layout";
+import { CARD_H, CARD_W, type Point, type StructureFrames } from "./atlas-layout";
 import { ATTRIBUTION_LABEL, NODE_TYPE_LABEL, RELATION_LABEL, VERIFICATION_LABEL, type GraphCard, type GraphEdge } from "./atlas-client";
 
 // The node canvas: cards are HTML over an SVG layer of edges, all inside one
@@ -19,11 +19,18 @@ interface Props {
   onSelect: (ids: string[]) => void;
   onMove: (id: string, p: Point) => void;
   onExpand: (id: string) => void;
+  /** The book's spine (structure view): parts, chapter boxes, reading-order arrows, the outer band. */
+  frames?: StructureFrames | null;
+  /** Positions come from the spine: cards cannot be dragged. */
+  locked?: boolean;
+  /** Edges the placement already says (book to its knowledge in the structure view). */
+  hideEdge?: (edge: GraphEdge) => boolean;
 }
 
 interface View { x: number; y: number; k: number }
 
-export function AtlasCanvas({ cards, edges, positions, selected, fresh, onSelect, onMove, onExpand }: Props) {
+export function AtlasCanvas({ cards, edges: allEdges, positions, selected, fresh, onSelect, onMove, onExpand, frames, locked = false, hideEdge }: Props) {
+  const edges = useMemo(() => (hideEdge ? allEdges.filter((e) => !hideEdge(e)) : allEdges), [allEdges, hideEdge]);
   const host = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<View>({ x: 0, y: 0, k: 1 });
   const [drag, setDrag] = useState<{ id: string; p: Point } | null>(null);
@@ -67,13 +74,14 @@ export function AtlasCanvas({ cards, edges, positions, selected, fresh, onSelect
     const el = host.current;
     const pts = cards.map((c) => positions[c.id]).filter(Boolean);
     if (!el || pts.length === 0) return;
-    const minX = Math.min(...pts.map((p) => p.x)) - CARD_W / 2 - 40;
-    const maxX = Math.max(...pts.map((p) => p.x)) + CARD_W / 2 + 40;
-    const minY = Math.min(...pts.map((p) => p.y)) - CARD_H / 2 - 40;
-    const maxY = Math.max(...pts.map((p) => p.y)) + CARD_H / 2 + 40;
+    const boxes = [...(frames?.parts ?? []), ...(frames?.chapters ?? []), ...(frames?.outer ? [frames.outer] : [])];
+    const minX = Math.min(...pts.map((p) => p.x - CARD_W / 2), ...boxes.map((b) => b.x)) - 40;
+    const maxX = Math.max(...pts.map((p) => p.x + CARD_W / 2), ...boxes.map((b) => b.x + b.w)) + 40;
+    const minY = Math.min(...pts.map((p) => p.y - CARD_H / 2), ...boxes.map((b) => b.y)) - 40;
+    const maxY = Math.max(...pts.map((p) => p.y + CARD_H / 2), ...boxes.map((b) => b.y + b.h)) + 40;
     const k = Math.min(1.2, Math.max(0.25, Math.min(el.clientWidth / (maxX - minX), el.clientHeight / (maxY - minY))));
     setView({ k, x: el.clientWidth / 2 - ((minX + maxX) / 2) * k, y: el.clientHeight / 2 - ((minY + maxY) / 2) * k });
-  }, [cards, positions]);
+  }, [cards, positions, frames]);
 
   // Fit once when the first cards arrive; later changes keep the user's view.
   useEffect(() => {
@@ -146,7 +154,17 @@ export function AtlasCanvas({ cards, edges, positions, selected, fresh, onSelect
   const onCardDown = (event: React.PointerEvent, card: GraphCard) => {
     if (event.button !== 0 || (event.target as HTMLElement).closest("button")) return;
     event.stopPropagation();
-    const origin = positions[card.id];
+    const origin = locked ? undefined : positions[card.id];
+    if (locked) {
+      // Spine positions are fixed: a press only selects.
+      const up = (e: PointerEvent) => {
+        window.removeEventListener("pointerup", up);
+        if (e.shiftKey || e.metaKey || e.ctrlKey) onSelect(selected.includes(card.id) ? selected.filter((id) => id !== card.id) : [...selected, card.id]);
+        else onSelect([card.id]);
+      };
+      window.addEventListener("pointerup", up);
+      return;
+    }
     if (!origin) return;
     const start = { x: event.clientX, y: event.clientY };
     let current = origin;
@@ -218,6 +236,38 @@ export function AtlasCanvas({ cards, edges, positions, selected, fresh, onSelect
   return (
     <div ref={host} className="atlas-canvas" onPointerDown={onBackgroundDown}>
       <div className="atlas-plane" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})` }}>
+        {frames?.outer && (
+          <div className="atlas-outer" style={{ left: frames.outer.x, top: frames.outer.y, width: frames.outer.w, height: frames.outer.h }}>
+            <span>外围补充：背景、对照、Agent 的延伸（不对应书中某一处）</span>
+          </div>
+        )}
+        {frames?.parts.map((part) => (
+          <div key={part.id} className="atlas-part" style={{ left: part.x, top: part.y, width: part.w, height: part.h }} title={part.title}>{part.title}</div>
+        ))}
+        {frames?.chapters.map((chapter) => (
+          <div key={chapter.id} className="atlas-chapter" style={{ left: chapter.x, top: chapter.y, width: chapter.w, minHeight: chapter.h }} title={[chapter.title, ...chapter.sections.map((s) => `· ${s.title}`)].join("\n")}>
+            <div className="atlas-chapter-title">{chapter.title}</div>
+            {chapter.sections.slice(0, 3).map((section) => <div key={section.id} className="atlas-chapter-section">{section.title}</div>)}
+            {chapter.sections.length > 3 && <div className="atlas-chapter-section atlas-dim">还有 {chapter.sections.length - 3} 节</div>}
+          </div>
+        ))}
+        {frames && (
+          <svg className="atlas-edges atlas-spine" width="1" height="1" aria-hidden="true">
+            <defs>
+              <marker id="atlas-spine-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M0 0 L10 5 L0 10 z" fill="currentColor" />
+              </marker>
+            </defs>
+            {frames.arrows.map((a, i) => (
+              <path
+                key={i}
+                d={a.x1 === a.x2 ? `M ${a.x1} ${a.y1} L ${a.x2} ${a.y2}` : `M ${a.x1} ${a.y1} V ${(a.y1 + a.y2) / 2} H ${a.x2} V ${a.y2}`}
+                className="atlas-spine-line"
+                markerEnd="url(#atlas-spine-arrow)"
+              />
+            ))}
+          </svg>
+        )}
         <svg className="atlas-edges" width="1" height="1" aria-hidden="true">
           <defs>
             <marker id="atlas-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -249,7 +299,7 @@ export function AtlasCanvas({ cards, edges, positions, selected, fresh, onSelect
             <div
               key={card.id}
               ref={(el) => { if (el) cardEls.current.set(card.id, el); else cardEls.current.delete(card.id); }}
-              className={`atlas-card atlas-card-${card.type}${selectedSet.has(card.id) ? " is-selected" : ""}${fresh.has(card.id) ? " is-fresh" : ""}${drag?.id === card.id ? " is-dragging" : ""}${focused && !lit.has(card.id) ? " is-dim" : ""}`}
+              className={`atlas-card atlas-card-${card.type}${selectedSet.has(card.id) ? " is-selected" : ""}${fresh.has(card.id) ? " is-fresh" : ""}${drag?.id === card.id ? " is-dragging" : ""}${focused && !lit.has(card.id) ? " is-dim" : ""}${frames && card.kind === "node" && !card.chapter ? " is-outer" : ""}`}
               style={{ left: p.x, top: p.y, width: CARD_W }}
               onPointerDown={(event) => onCardDown(event, card)}
               onDoubleClick={() => onExpand(card.id)}

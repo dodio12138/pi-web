@@ -14,7 +14,8 @@ export { ConversationLog, textHash, type CapturedMessage, type OrganizedMark } f
 export { buildContext, describe, type ContextPack, type ContextRequest, type ObjectView } from "./context";
 export { READING_LENSES, readingLensPrompt, readingLensTemplate, type ReadingLens } from "./reading-guide";
 export { BOOK_CORE_TAGS, CLC_CLASSES, CLC_MAX_CODES, CLC_SCHEME, CLC_SECOND_LEVEL, CLC_VERSION, clcCandidates, clcClassOf, clcLabel, clcPrompt } from "./clc";
-export { buildGraph, graphKey, listBooks, listTags, type Graph, type GraphCard, type GraphEdge, type GraphRequest, type GraphViewKind } from "./graph";
+export { buildGraph, graphKey, listBooks, listTags, type Graph, type GraphCard, type GraphEdge, type GraphOutline, type GraphRequest, type GraphViewKind } from "./graph";
 export { LAYOUT_FILE, readLayout, updateLayout, type AtlasLayout, type LayoutChange, type Point } from "./layout";
 export { exportPack, lookupPack, PACK_FORMAT, PACK_SCHEMA_VERSION, type AtlasPack, type GameFilter, type PackOptions, type PackUse } from "./pack";
 export { BOOK_SESSIONS_FILE, bookOfSession, findBookSession, linkBookSession, type BookSession } from "./book-sessions";
+export { chapterOf, outlineColumns, outlineItem, outlinePrompt, type OutlineChapter, type OutlineColumn } from "./outline";

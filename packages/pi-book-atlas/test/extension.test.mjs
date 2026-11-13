@@ -387,3 +387,24 @@ test("a turn the Agent records as it goes is organized; in a book's session new 
   await host.emit("before_agent_start", event);
   assert.match(event.systemPromptOptions.sections["pi-book-atlas"], /Record as you go/);
 });
+
+test("a book's session asks for the table of contents first, then works from it", async (t) => {
+  const host = await fakePi(t);
+  const made = await host.tool("atlas_apply_patch", { operations: [{ op: "create_book", ref: "$b", fields: { title: "自然社会", authors: ["李猛"] } }] });
+  await host.command("guide 自然社会");
+  assert.match(host.sent.at(-1), /第一步，目录：这本书还没有目录。先问我要目录/);
+  await host.command("on");
+  const ask = () => { const e = { messageType: "user", prompt: "x", systemPromptOptions: { sections: {} } }; return host.emit("before_agent_start", e).then(() => e.systemPromptOptions.sections["pi-book-atlas"]); };
+  assert.match(await ask(), /no table of contents in the library yet[\s\S]*ask the user to paste it[\s\S]*Never invent chapter titles/);
+
+  const saved = await host.tool("atlas_apply_patch", { operations: [{ op: "update_book", id: made.created.$b, changes: { outline: { source: "model", items: [
+    { id: "p1", title: "上篇 自然状态", level: "part", parent: null },
+    { id: "c2", title: "第二章 霍布斯", level: "chapter", parent: "p1" },
+  ] } } }] });
+  assert.equal(saved.ok, true, JSON.stringify(saved));
+  const section = await ask();
+  assert.match(section, /Table of contents \(recalled by a model, unchecked\):\np1 上篇 自然状态\n  c2 第二章 霍布斯/);
+  assert.match(section, /replace it \(source "user"\)/);
+  await host.command("guide 自然社会");
+  assert.match(host.sent.at(-1), /书卡上已有目录（来源：模型回忆、未核实）/);
+});

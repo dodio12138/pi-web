@@ -49,7 +49,7 @@ export interface ImportReport {
 }
 
 const KNOWN_FIELDS: Record<ObjectKind, Set<string>> = {
-  book: new Set(["id", "schema_version", "revision", "created_at", "updated_at", "source_refs", "verification", "title", "authors", "published_year", "external_ids", "classification", "tag_bindings", "entry_questions", "description_profile", "archived", "body"]),
+  book: new Set(["id", "schema_version", "revision", "created_at", "updated_at", "source_refs", "verification", "title", "authors", "published_year", "external_ids", "classification", "tag_bindings", "entry_questions", "outline", "description_profile", "archived", "body"]),
   node: new Set(["id", "schema_version", "revision", "created_at", "updated_at", "source_refs", "verification", "type", "title", "summary", "aliases", "tag_bindings", "attribution", "archived", "body"]),
   tag: new Set(["id", "schema_version", "revision", "created_at", "updated_at", "type", "name", "definition", "aliases", "parent_ids", "status", "redirect_to", "merged_from"]),
   relation: new Set(["id", "schema_version", "revision", "created_at", "updated_at", "source_refs", "verification", "from_id", "to_id", "type", "scope", "attribution", "note", "archived"]),

@@ -80,3 +80,39 @@ test("a long row wraps instead of running off the canvas", async () => {
   assert.ok(Math.max(...xs) - Math.min(...xs) < 7 * (CARD_W + 56), "at most six across");
   assert.ok(new Set(cards.slice(1).map((c) => p[c.id].y)).size >= 3, "14 cards wrap into three rows");
 });
+
+test("the structure layout hangs knowledge under its chapter and puts the rest around the spine", async () => {
+  const { structureLayout, CARD_W: W, CARD_H: H } = await jiti.import("./atlas-layout.ts");
+  const columns = [
+    { id: null, title: null, chapters: [{ id: "intro", title: "导论", sections: [] }] },
+    { id: "p1", title: "上篇", chapters: [{ id: "c1", title: "第一章", sections: [] }, { id: "c2", title: "第二章", sections: [{ id: "s5", title: "被抛者" }] }] },
+    { id: "p2", title: "中篇", chapters: [{ id: "c5", title: "第五章", sections: [] }] },
+  ];
+  const cards = [
+    { id: "book-a", kind: "book", type: "book" },
+    { id: "node-1", kind: "node", type: "concept", chapter: "c1" },
+    { id: "node-2", kind: "node", type: "concept", chapter: "c2" },
+    { id: "node-3", kind: "node", type: "claim", chapter: "c2" },
+    { id: "node-4", kind: "node", type: "question", chapter: "c2" },
+    { id: "node-5", kind: "node", type: "concept", chapter: "c5" },
+    { id: "node-x", kind: "node", type: "claim", chapter: null },
+    { id: "node-y", kind: "node", type: "concept", chapter: "gone" },
+  ];
+  const { positions: p, frames } = structureLayout(columns, cards, "book-a");
+  assert.equal(Object.keys(p).length, cards.length);
+  assert.deepEqual(frames.parts.map((f) => f.id), ["p1", "p2"]);
+  assert.deepEqual(frames.chapters.map((f) => f.id), ["intro", "c1", "c2", "c5"]);
+  const box = (id) => frames.chapters.find((f) => f.id === id);
+  const inside = (id, ch) => p[id].x - W / 2 >= box(ch).x && p[id].x + W / 2 <= box(ch).x + box(ch).w;
+  assert.ok(inside("node-1", "c1") && inside("node-2", "c2") && inside("node-5", "c5"), "under their chapter's column");
+  assert.ok(p["node-1"].y > box("c1").y + box("c1").h && p["node-1"].y < box("c2").y, "between its box and the next chapter");
+  assert.ok(p["node-4"].y > p["node-2"].y, "a third card starts a new row");
+  assert.ok(p["node-x"].y > frames.outer.y && p["node-y"].y > frames.outer.y, "no chapter, or an unknown one: outer band");
+  assert.ok(frames.chapters.every((f) => f.y > p["book-a"].y), "the book heads the spine");
+  const all = Object.entries(p);
+  for (const [a, pa] of all) for (const [b, pb] of all) if (a < b) assert.ok(!(Math.abs(pa.x - pb.x) < W && Math.abs(pa.y - pb.y) < H), `${a} overlaps ${b}`);
+  for (const f of frames.chapters) for (const [id, q] of all) {
+    if (id === "book-a") continue;
+    assert.ok(!(q.x + W / 2 > f.x && q.x - W / 2 < f.x + f.w && q.y + H / 2 > f.y && q.y - H / 2 < f.y + f.h), `${id} covers chapter ${f.id}`);
+  }
+});

@@ -158,3 +158,15 @@ a.atlas-btn { text-decoration: none; }
 .atlas-peek-summary { margin: 0; color: var(--text-muted); white-space: pre-wrap; }
 .atlas-peek-tags { display: flex; flex-wrap: wrap; gap: 4px; }
 .atlas-reading { color: var(--accent); border-color: var(--accent); height: 22px; }
+
+/* Structure view: the book's table of contents as the spine */
+.atlas-part { position: absolute; display: flex; align-items: center; padding: 0 12px; font-weight: 600; font-size: 13px; color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--bg-panel)); border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent); border-radius: 6px; box-sizing: border-box; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.atlas-chapter { position: absolute; padding: 8px 12px; box-sizing: border-box; background: var(--bg-subtle, var(--bg-panel)); border: 1px solid var(--border); border-left: 3px solid color-mix(in srgb, var(--accent) 60%, var(--border)); border-radius: 4px; }
+.atlas-chapter-title { font-weight: 600; font-size: 12.5px; line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.atlas-chapter-section { font-size: 11px; line-height: 17px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 10px; }
+.atlas-spine { color: color-mix(in srgb, var(--accent) 55%, var(--text-dim)); }
+.atlas-spine-line { stroke: currentColor; stroke-width: 1.4; fill: none; }
+.atlas-outer { position: absolute; border: 1px dashed color-mix(in srgb, var(--text-dim) 60%, transparent); border-radius: 10px; box-sizing: border-box; }
+.atlas-outer > span { position: absolute; top: 10px; left: 14px; font-size: 11px; color: var(--text-dim); }
+.atlas-card.is-outer { border-style: dashed; border-top-style: solid; }
+.atlas-spine-bar { position: absolute; top: 32px; left: 10px; z-index: 2; display: flex; align-items: center; gap: 8px; font-size: 11px; background: color-mix(in srgb, var(--bg) 85%, transparent); padding: 2px 4px; border-radius: 4px; }
