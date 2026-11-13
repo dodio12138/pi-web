@@ -83,6 +83,8 @@ interface Props {
   onUseDefaultDirectory: () => void;
   /** "Use workspace path": the workspace (Settings › General › Workspace) itself, as "Use default directory" uses its folder. */
   onUseWorkspaceDirectory?: () => void;
+  /** "Use library folder": the Book Atlas library folder (Settings › General › Book library); its sessions learn. */
+  onUseAtlasDirectory?: () => void;
   /** "Open another project…": the folder picker. Focus goes back to `opener` when nothing moves. */
   onOpenFolder: (opener: HTMLElement | null) => void;
   onRefreshWorktrees: () => void;
@@ -214,6 +216,7 @@ export function ProjectWorktreePicker({
   onPick,
   onUseDefaultDirectory,
   onUseWorkspaceDirectory,
+  onUseAtlasDirectory,
   onOpenFolder,
   onRefreshWorktrees,
   onCreateWorktree,
@@ -396,6 +399,13 @@ export function ProjectWorktreePicker({
         label: t("sidebar.useWorkspaceDirectory"),
         icon: <FolderIcon size={13} />,
         onSelect: () => onUseWorkspaceDirectory(),
+      } satisfies SidebarMenuItem] : []),
+      ...(onUseAtlasDirectory ? [{
+        type: "item",
+        id: "atlas-directory",
+        label: t("sidebar.useAtlasDirectory"),
+        icon: <FolderIcon size={13} />,
+        onSelect: () => onUseAtlasDirectory(),
       } satisfies SidebarMenuItem] : []),
       {
         type: "item",

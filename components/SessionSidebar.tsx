@@ -96,6 +96,7 @@ import { SessionTree, sessionRowTitle, type SessionTreeReveal } from "./SessionT
 import { SidebarMenu, type SidebarMenuAnchor, type SidebarMenuItem } from "./SidebarMenu";
 import { SidebarToast, type SidebarToastAction, type SidebarToastData } from "./SidebarToast";
 import { fetchWorkspaceDir } from "./WorkspaceSettings";
+import { fetchAtlasSettings } from "./atlas/AtlasSettings";
 import {
   ArchiveIcon,
   ChangesIcon,
@@ -262,6 +263,8 @@ export interface SessionSidebarControl {
   openDefaultDirectoryForNewSession(onPicked: (target: NewSessionTarget) => void): void;
   /** "Use workspace path" in the composer bar's project menu. */
   openWorkspaceDirectoryForNewSession(onPicked: (target: NewSessionTarget) => void): void;
+  /** "Use library folder": the Book Atlas library folder, once it is chosen and the library is on. */
+  openAtlasDirectoryForNewSession(onPicked: (target: NewSessionTarget) => void): void;
   /** Lists the worktrees of the sidebar's cwd again (the composer's worktree menu opening). */
   refreshWorktrees(): void;
   /** Creates a worktree of `project` and lists it at once; the caller starts the session in it. */
@@ -1306,6 +1309,18 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   }, [commitCustomPath, showToast, t]);
   const handleWorkspaceCwdRef = useRef(handleWorkspaceCwd);
   handleWorkspaceCwdRef.current = handleWorkspaceCwd;
+  // "Use library folder": as the workspace, but only once the library is
+  // placed and on (Settings › General › Book library); a toast says so otherwise.
+  const handleAtlasCwd = useCallback(async (purpose: "files" | "new-session" = "files") => {
+    const atlas = await fetchAtlasSettings();
+    if (!atlas?.installed || !atlas.folderSet) {
+      showToast(t("sidebar.atlasNotSet"));
+      return;
+    }
+    await commitCustomPath(atlas.root, { remember: false, purpose });
+  }, [commitCustomPath, showToast, t]);
+  const handleAtlasCwdRef = useRef(handleAtlasCwd);
+  handleAtlasCwdRef.current = handleAtlasCwd;
 
   // Both pickers create through here: the worktree is listed at once, so
   // projectFor() keeps it in the project before the refetch lands, and
@@ -1403,6 +1418,11 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       folderPickRef.current = onPicked;
       folderReturnFocusRef.current = null;
       void handleWorkspaceCwdRef.current("new-session");
+    },
+    openAtlasDirectoryForNewSession: (onPicked) => {
+      folderPickRef.current = onPicked;
+      folderReturnFocusRef.current = null;
+      void handleAtlasCwdRef.current("new-session");
     },
     openDefaultDirectoryForNewSession: (onPicked) => {
       folderPickRef.current = onPicked;
@@ -3212,6 +3232,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               onUseDefaultDirectory={() => { void handleDefaultCwd(); }}
               onOpenFolder={handleCustomPathClick}
               onUseWorkspaceDirectory={() => { void handleWorkspaceCwd(); }}
+              onUseAtlasDirectory={() => { void handleAtlasCwd(); }}
               onRefreshWorktrees={refreshWorktrees}
               onCreateWorktree={createWorktree}
               onRemoveWorktree={handleRemoveWorktree}

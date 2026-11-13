@@ -29,8 +29,8 @@ interface Props {
   /** Cards on the canvas, to pick a relation target from. */
   cards: GraphCard[];
   onAsk: (action: string) => void;
-  /** For a book: walk it through the reading lenses in the chat (/atlas guide). */
-  onGuide?: (title: string) => void;
+  /** For a book: open its own session, or start one in the library folder (/atlas guide). */
+  onOpenBook?: (book: { id: string; title: string }) => void;
   onSelect: (id: string) => void;
   onHide: (id: string) => void;
   onChanged: () => void;
@@ -68,7 +68,7 @@ function draftOf(view: ObjectView): Draft {
 
 const split = (s: string) => s.split(/[、,，;；\n]/).map((x) => x.trim()).filter(Boolean);
 
-export function AtlasDetail({ id, tags, cards, onAsk, onGuide, onSelect, onHide, onChanged, onOpenSession, onClose }: Props) {
+export function AtlasDetail({ id, tags, cards, onAsk, onOpenBook, onSelect, onHide, onChanged, onOpenSession, onClose }: Props) {
   const [view, setView] = useState<ObjectView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -79,6 +79,15 @@ export function AtlasDetail({ id, tags, cards, onAsk, onGuide, onSelect, onHide,
   const [tagInput, setTagInput] = useState("");
   const [relation, setRelation] = useState<{ to: string; type: string } | null>(null);
   const isBook = id.startsWith("book-");
+  // Whether the book already has its session (one book, one session).
+  const [bookSession, setBookSession] = useState(false);
+  useEffect(() => {
+    if (!isBook || !view) return;
+    const params = new URLSearchParams({ op: "book-session", book_id: id, title: String((view.object as { title?: string }).title ?? "") });
+    let alive = true;
+    void fetch(`/api/atlas?${params}`, { cache: "no-store" }).then((r) => r.json()).then((d: { session?: unknown }) => { if (alive) setBookSession(Boolean(d.session)); }).catch(() => {});
+    return () => { alive = false; };
+  }, [id, isBook, view]);
 
   const load = useCallback(async () => {
     try {
@@ -239,8 +248,13 @@ export function AtlasDetail({ id, tags, cards, onAsk, onGuide, onSelect, onHide,
             o.summary ? <p className="atlas-detail-summary">{String(o.summary)}</p> : null
           )}
           <div className="atlas-row atlas-wrap">
-            {isBook && onGuide && (
-              <button type="button" className="atlas-btn atlas-btn-primary" onClick={() => onGuide(String(o.title ?? ""))} title="让 Agent 用八个读书透镜带你过一遍这本书，并整理书卡、分类和标签">读书透镜引导</button>
+            {isBook && onOpenBook && (
+              <button
+                type="button"
+                className="atlas-btn atlas-btn-primary"
+                onClick={() => onOpenBook({ id, title: String(o.title ?? "") })}
+                title={bookSession ? "回到这本书的会话" : "在知识库目录里为这本书开一个会话，先用读书透镜过一遍"}
+              >{bookSession ? "打开本书会话" : "开始本书会话"}</button>
             )}
             {ACTIONS.map((action) => (
               <button key={action} type="button" className="atlas-btn" onClick={() => onAsk(action)} title={`把这张卡片带进对话：${action}`}>{action}</button>

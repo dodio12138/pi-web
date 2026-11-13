@@ -1508,6 +1508,43 @@ export function AppShell() {
 
   // Show chat area if a session is selected, or if we have a cwd to start a new session in
   const effectiveNewSessionCwd = newSessionCwd ?? (selectedSession === null && activeCwd ? activeCwd : null);
+
+  // One book, one session (Pi Book Atlas): open the book's session, or start
+  // one in the library folder and walk the book through the reading lenses.
+  // The command is sent once the new composer stands in that folder.
+  const pendingAtlasStartRef = useRef<{ cwd: string; text: string } | null>(null);
+  const [atlasStartTick, setAtlasStartTick] = useState(0);
+  const handleAtlasOpenBook = useCallback(async (book: { id: string; title: string }): Promise<string | null> => {
+    const params = new URLSearchParams({ op: "book-session", book_id: book.id, title: book.title });
+    const found = await fetch(`/api/atlas?${params}`, { cache: "no-store" }).then((r) => r.json()).catch(() => null) as { root?: string; ready?: boolean; session?: SessionInfo | null } | null;
+    if (!found?.ready || !found.root) return "先在 设置 › 常规 › 书籍知识库 里选择目录并启用";
+    if (found.session) {
+      handleSelectSession(sessionCatalog.find((item) => item.id === found.session!.id) ?? found.session);
+      if (isMobile) setRightPanelOpen(false);
+      return null;
+    }
+    const validated = await fetch("/api/cwd/validate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cwd: found.root }),
+    }).then((r) => r.json()).catch(() => null) as { cwd?: string; projectKey?: string; projectRoot?: string; error?: string } | null;
+    if (!validated?.cwd) return validated?.error ?? "无法打开知识库目录";
+    pendingAtlasStartRef.current = { cwd: validated.cwd, text: `/atlas guide ${book.title}` };
+    sidebarControlRef.current?.startNewSessionIn({ cwd: validated.cwd, projectKey: validated.projectKey, projectRoot: validated.projectRoot });
+    setAtlasStartTick((n) => n + 1);
+    if (isMobile) setRightPanelOpen(false);
+    return null;
+  }, [handleSelectSession, isMobile, sessionCatalog]);
+  useEffect(() => {
+    const pending = pendingAtlasStartRef.current;
+    if (!pending || selectedSession !== null || effectiveNewSessionCwd !== pending.cwd) return;
+    // The fresh composer mounts with this render: send on the next frame.
+    const frame = window.requestAnimationFrame(() => {
+      if (pendingAtlasStartRef.current !== pending) return;
+      if (chatInputRef.current?.sendText(pending.text)) pendingAtlasStartRef.current = null;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [atlasStartTick, effectiveNewSessionCwd, selectedSession]);
   const newSessionDraftKey = selectedSession === null && effectiveNewSessionCwd
     ? `new:${newSessionDraftId}:${effectiveNewSessionCwd}`
     : null;
@@ -1536,6 +1573,9 @@ export function AppShell() {
   const handleWorkspaceDirectoryForNewSession = useCallback(() => {
     sidebarControlRef.current?.openWorkspaceDirectoryForNewSession((target) => pickNewSessionContextRef.current(target, "project"));
   }, []);
+  const handleAtlasDirectoryForNewSession = useCallback(() => {
+    sidebarControlRef.current?.openAtlasDirectoryForNewSession((target) => pickNewSessionContextRef.current(target, "project"));
+  }, []);
   const handleDefaultDirectoryForNewSession = useCallback(() => {
     sidebarControlRef.current?.openDefaultDirectoryForNewSession((target) => pickNewSessionContextRef.current(target, "project"));
   }, []);
@@ -1563,6 +1603,7 @@ export function AppShell() {
       onUseDefaultDirectory={handleDefaultDirectoryForNewSession}
       onOpenFolder={handleOpenFolderForNewSession}
       onUseWorkspaceDirectory={handleWorkspaceDirectoryForNewSession}
+      onUseAtlasDirectory={handleAtlasDirectoryForNewSession}
       onRefreshWorktrees={handleRefreshNewSessionWorktrees}
       onCreateWorktree={handleCreateNewSessionWorktree}
     />
@@ -3108,6 +3149,7 @@ export function AppShell() {
                 sessionId={selectedSession?.id ?? null}
                 onInsert={handleAtlasInsert}
                 onSend={handleAtlasSend}
+                onOpenBook={handleAtlasOpenBook}
                 onOpenSession={(sessionId) => {
                   const session = sessionCatalog.find((item) => item.id === sessionId);
                   if (session) handleSelectSession(session);

@@ -17,3 +17,4 @@ export { BOOK_CORE_TAGS, CLC_CLASSES, CLC_MAX_CODES, CLC_SCHEME, CLC_SECOND_LEVE
 export { buildGraph, graphKey, listBooks, listTags, type Graph, type GraphCard, type GraphEdge, type GraphRequest, type GraphViewKind } from "./graph";
 export { LAYOUT_FILE, readLayout, updateLayout, type AtlasLayout, type LayoutChange, type Point } from "./layout";
 export { exportPack, lookupPack, PACK_FORMAT, PACK_SCHEMA_VERSION, type AtlasPack, type GameFilter, type PackOptions, type PackUse } from "./pack";
+export { BOOK_SESSIONS_FILE, bookOfSession, findBookSession, linkBookSession, type BookSession } from "./book-sessions";

@@ -15,6 +15,7 @@ export interface AtlasSettingsState {
   packagePath: string;
   root: string;
   rootSource: "env" | "settings" | "default";
+  folderSet: boolean;
   rootSetting: string | null;
   autoEnable: boolean;
   exists: boolean;
@@ -81,6 +82,7 @@ export function AtlasSettings() {
           <span>{t("settings.atlasEnable")}</span>
           <ConfigSwitch
             checked={state?.installed === true}
+            disabled={loaded && !state.folderSet}
             loading={!loaded || saving === "installed"}
             label={t("settings.atlasEnable")}
             describedBy="settings-atlas-enable-note"
@@ -88,23 +90,27 @@ export function AtlasSettings() {
           />
         </div>
       </div>
-      <p id="settings-atlas-enable-note" className="settings-general-description">{t("settings.atlasEnableNote")}</p>
+      <p id="settings-atlas-enable-note" className="settings-general-description">
+        {loaded && !state.folderSet ? t("settings.atlasEnableNeedsFolder") : t("settings.atlasEnableNote")}
+      </p>
 
       <h4 className="settings-general-heading" style={{ fontSize: "0.95em", marginTop: 12 }}>{t("settings.atlasFolder")}</h4>
       <div className="settings-workspace-row">
-        <code className="settings-workspace-path" title={state?.root}>{loaded ? state.root : "…"}</code>
+        <code className="settings-workspace-path" title={state?.folderSet ? state.root : undefined} data-empty={(loaded && !state.folderSet) || undefined}>
+          {loaded ? (state.folderSet ? state.root : t("settings.workspaceNone")) : "…"}
+        </code>
         <ConfigButton size="small" disabled={!loaded || saving !== null || envRoot} onClick={() => setPicking(true)}>
           {t("settings.workspaceChoose")}
         </ConfigButton>
         {state?.rootSetting && !envRoot && (
           <ConfigButton size="small" variant="ghost" disabled={saving !== null} onClick={() => void save("root", { root: null })}>
-            {t("settings.atlasFolderReset")}
+            {t("settings.workspaceClear")}
           </ConfigButton>
         )}
       </div>
       <p className="settings-general-description">
-        {envRoot ? t("settings.atlasFolderEnv") : state?.rootSource === "default" ? t("settings.atlasFolderDefault") : t("settings.atlasFolderSet")}
-        {loaded && !state.exists && ` ${t("settings.atlasFolderNew")}`}
+        {envRoot ? t("settings.atlasFolderEnv") : t("settings.atlasFolderSet")}
+        {loaded && state.folderSet && !state.exists && ` ${t("settings.atlasFolderNew")}`}
       </p>
 
       <div className="settings-chat-options">
@@ -124,7 +130,7 @@ export function AtlasSettings() {
       {picking && state && (
         <DirectoryPicker
           stacked
-          initialPath={state.exists ? state.root : undefined}
+          initialPath={state.folderSet && state.exists ? state.root : undefined}
           busy={saving !== null}
           error={error}
           onCancel={() => setPicking(false)}

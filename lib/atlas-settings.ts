@@ -22,9 +22,11 @@ export interface AtlasSettingsView {
   /** The package is listed in pi's settings: new sessions load it. */
   installed: boolean;
   packagePath: string;
-  /** The folder the library is in now, and what decides it. */
+  /** The folder the library is in now, and what decides it. "default" counts as not chosen: the library cannot be turned on. */
   root: string;
   rootSource: "env" | "settings" | "default";
+  /** A folder was chosen (or set by the environment). */
+  folderSet: boolean;
   /** The folder as set in settings, if any. */
   rootSetting: string | null;
   autoEnable: boolean;
@@ -60,6 +62,7 @@ export async function readAtlasSettings(env: NodeJS.ProcessEnv = process.env): P
     packagePath,
     root,
     rootSource: env.PI_BOOK_ATLAS_DIR ? "env" : bookAtlas.root ? "settings" : "default",
+    folderSet: Boolean(env.PI_BOOK_ATLAS_DIR || bookAtlas.root),
     rootSetting: typeof bookAtlas.root === "string" ? bookAtlas.root : null,
     autoEnable: bookAtlas.autoEnable === true,
     exists: existsSync(join(root, "atlas.json")),
@@ -82,7 +85,8 @@ export interface AtlasSettingsChange {
   autoEnable?: boolean;
 }
 
-export async function updateAtlasSettings(change: AtlasSettingsChange): Promise<AtlasSettingsView> {
+export async function updateAtlasSettings(input: AtlasSettingsChange): Promise<AtlasSettingsView> {
+  let change = input;
   const packagePath = bundledAtlasPackage();
   if (change.installed && !existsSync(join(packagePath, "package.json"))) throw new Error(`The extension is not at ${packagePath}`);
   let root: string | null | undefined;
@@ -100,6 +104,12 @@ export async function updateAtlasSettings(change: AtlasSettingsChange): Promise<
       }
     }
   }
+  // The library has to be placed on purpose: no folder, no library.
+  const current = await readAtlasSettings();
+  const folderAfter = root !== undefined ? root : current.rootSource !== "default" ? current.root : null;
+  if (change.installed && !folderAfter && current.rootSource !== "env") throw new Error("Choose the library folder first");
+  // Clearing the folder turns the library off with it.
+  if (root === null && current.rootSource !== "env") change = { ...change, installed: false };
   await updateGlobalSettings(getGlobalSettingsPath(), (settings) => {
     if (change.installed !== undefined) {
       const rest = packageEntries(settings).filter((entry) => !isAtlasEntry(entry, packagePath));

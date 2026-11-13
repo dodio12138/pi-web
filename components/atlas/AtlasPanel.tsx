@@ -20,6 +20,8 @@ interface Props {
   onInsert: (text: string) => void;
   /** Sends a command to the current chat; false when it cannot right now. */
   onSend: (text: string) => boolean;
+  /** Opens the book's own session, or starts it; resolves to a problem to show, or null. */
+  onOpenBook?: (book: { id: string; title: string }) => Promise<string | null>;
   onOpenSession?: (sessionId: string) => void;
 }
 
@@ -32,7 +34,7 @@ const VIEWS: { key: GraphView; label: string }[] = [
 
 const PREFS_KEY = "pi-atlas-panel";
 
-export function AtlasPanel({ active, sessionId, onInsert, onSend, onOpenSession }: Props) {
+export function AtlasPanel({ active, sessionId, onInsert, onSend, onOpenBook, onOpenSession }: Props) {
   const [overview, setOverview] = useState<AtlasOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<GraphView>("book");
@@ -436,7 +438,7 @@ export function AtlasPanel({ active, sessionId, onInsert, onSend, onOpenSession 
             tags={overview.tags ?? []}
             cards={graph?.cards ?? []}
             onAsk={ask}
-            onGuide={(title) => send(`/atlas guide ${title}`, "已发送读书引导")}
+            onOpenBook={onOpenBook ? (book) => void onOpenBook(book).then((problem) => setStatus(problem ?? "")) : undefined}
             onSelect={(id) => {
               if (graph && !graph.cards.some((c) => c.id === id)) setExpand((e) => [...e, id]);
               select([id]);

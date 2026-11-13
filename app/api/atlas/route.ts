@@ -5,6 +5,7 @@ import {
   buildGraph,
   describe,
   exportPack,
+  findBookSession,
   graphKey,
   listBooks,
   listTags,
@@ -20,6 +21,7 @@ import {
 import { resolveAtlasRoot, type AtlasSettings } from "@/packages/pi-book-atlas/src/root";
 import { getGlobalSettingsPath } from "@/lib/global-settings-file";
 import { readAtlasSettings, sessionLearning, updateAtlasSettings, type AtlasSettingsChange } from "@/lib/atlas-settings";
+import { readSessionInfo, resolveSessionPath } from "@/lib/session-reader";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
 
 // The knowledge graph panel's backend (Pi Book Atlas, fork only). It goes
@@ -68,6 +70,14 @@ export async function GET(req: Request) {
       const sessionId = params.get("session_id");
       const learning = sessionId && view.installed ? await sessionLearning(sessionId, view.autoEnable) : null;
       return NextResponse.json({ ...view, learning }, { headers: NO_STORE });
+    }
+    if (op === "book-session") {
+      // One book, one session: the one /atlas guide last linked, if it still exists.
+      const view = await readAtlasSettings();
+      const link = findBookSession(view.root, { id: params.get("book_id") ?? undefined, title: params.get("title") ?? undefined });
+      const path = link ? await resolveSessionPath(link.session_id) : null;
+      const session = path ? await readSessionInfo(path) : null;
+      return NextResponse.json({ root: view.root, ready: view.installed && view.folderSet, session }, { headers: NO_STORE });
     }
     const { root, store } = library();
     if (!store) return NextResponse.json({ root, exists: false }, { headers: NO_STORE });

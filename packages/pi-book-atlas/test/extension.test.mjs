@@ -324,3 +324,36 @@ test("/atlas pack writes a pack with the chosen tags and game world, saying what
   assert.deepEqual(pack.books.map((b) => b.title), ["利维坦"]);
   assert.deepEqual(pack.filters.tag_ids, [made.created.$t]);
 });
+
+test("a session in the library folder learns without /atlas on, and is told to leave the files to patches", async (t) => {
+  const host = await fakePi(t);
+  host.ctx.cwd = join(host.root);
+  const event = { messageType: "user", prompt: "聊聊利维坦", systemPromptOptions: { sections: {} } };
+  await host.emit("before_agent_start", event);
+  const section = event.systemPromptOptions.sections["pi-book-atlas"];
+  assert.ok(section, "learning without /atlas on");
+  assert.match(section, /change only through atlas_apply_patch/);
+  host.say("user", "利维坦讲了什么");
+  await host.emit("agent_settled", {});
+  assert.equal(host.log().messages("session-abc").length, 1);
+
+  host.ctx.cwd = "/work/project";
+  const elsewhere = { messageType: "user", prompt: "x", systemPromptOptions: { sections: {} } };
+  await host.emit("before_agent_start", elsewhere);
+  assert.equal(elsewhere.systemPromptOptions.sections["pi-book-atlas"], undefined);
+});
+
+test("/atlas guide makes the session the book's own: linked, and the prompt names the book", async (t) => {
+  const host = await fakePi(t);
+  const made = await host.tool("atlas_apply_patch", { operations: [{ op: "create_book", ref: "$b", fields: { title: "利维坦", authors: ["霍布斯"] } }] });
+  await host.command("guide 《利维坦》");
+  const link = core.findBookSession(host.root, { id: made.created.$b });
+  assert.equal(link.session_id, "session-abc");
+  assert.equal(core.findBookSession(host.root, { title: "利维坦" }).book_id, made.created.$b);
+  assert.equal(core.bookOfSession(host.root, "session-abc").title, "利维坦");
+
+  await host.command("on");
+  const event = { messageType: "user", prompt: "第十三章讲什么", systemPromptOptions: { sections: {} } };
+  await host.emit("before_agent_start", event);
+  assert.match(event.systemPromptOptions.sections["pi-book-atlas"], new RegExp(`This session reads 《利维坦》 \\(${made.created.$b}\\)`));
+});

@@ -10,7 +10,9 @@ import {
   exportBackup,
   exportPack,
   findTagsByLabel,
+  bookOfSession,
   importBackup,
+  linkBookSession,
   normalizeLabel,
   openAtlas,
   BOOK_CORE_TAGS,
@@ -62,6 +64,7 @@ const GUIDANCE = `This is a learning session connected to the user's book and kn
 - Reuse existing tags (search first; a duplicate name or alias is refused with the existing id). Mark coverage honestly: core, discussed or mentioned.
 - Relations say what they mean: supports, refutes, qualifies, requires, explains… use related_to only when nothing more precise holds. A challenge to a view is a new refutes/qualifies relation, not an overwrite.
 - Attribution and evidence: your own explanations are ai_synthesis with verification pending; author_claim only with a source that shows it. Never invent quotations, page numbers or chapter locations: without the text, give a paraphrase and mark it unverified.
+- The library's files (books/, nodes/, *.json, conversations/) change only through atlas_apply_patch: never write, move or delete them with file tools, even when this session runs in the library folder.
 - Cite this conversation with the source ref "$conversation" (created for you). Pass the message ids the knowledge came from as source_message_ids.
 
 ${readingLensPrompt()}`;
@@ -84,8 +87,9 @@ export default function piBookAtlas(pi: ExtensionAPI) {
   };
 
   const atlas = () => {
-    if (opened) return opened;
     const root = resolveAtlasRoot(settings());
+    // The folder can be changed in pi-web's settings while pi runs: follow it.
+    if (opened && opened.root === root) return opened;
     try {
       const { store } = openAtlas(root, { create: true });
       opened = { store, log: new ConversationLog(root), root };
@@ -95,8 +99,17 @@ export default function piBookAtlas(pi: ExtensionAPI) {
     }
   };
 
+  const inLibraryFolder = (cwd: string | undefined): boolean => {
+    if (!cwd) return false;
+    const root = resolve(resolveAtlasRoot(settings()));
+    const here = resolve(cwd);
+    return here === root || here.startsWith(`${root}/`);
+  };
+
   /** A session is a learning session once /atlas on was given on its branch, or by default with bookAtlas.autoEnable. */
   const enabled = (ctx: ExtensionContext): boolean => {
+    // A session started in the library folder is there to read: it learns.
+    if (inLibraryFolder(ctx.cwd)) return true;
     let state: boolean | null = null;
     for (const entry of ctx.sessionManager.getBranch()) {
       if (entry.type === "custom" && entry.customType === MODE_ENTRY) state = Boolean((entry.data as { enabled?: boolean } | undefined)?.enabled);
@@ -159,8 +172,13 @@ export default function piBookAtlas(pi: ExtensionAPI) {
       return;
     }
     let store: AtlasStore | null = null;
-    try { store = atlas().store; } catch { store = null; }
-    event.systemPromptOptions.sections[SECTION] = guidanceWithHints(store, event.messageType === "user" ? event.prompt : undefined);
+    let root: string | null = null;
+    try { ({ store, root } = atlas()); } catch { store = null; }
+    let section = guidanceWithHints(store, event.messageType === "user" ? event.prompt : undefined);
+    // A book's own session: questions are about that book unless another is named.
+    const book = root ? bookOfSession(root, ctx.sessionManager.getSessionId()) : null;
+    if (book) section += `\n\nThis session reads 《${book.title}》${book.book_id ? ` (${book.book_id})` : ""}: a question that names no other book is about it, and what is learned here belongs to its card.`;
+    event.systemPromptOptions.sections[SECTION] = section;
   });
 
   // ---- tools -------------------------------------------------------------
@@ -344,8 +362,12 @@ A refused patch writes nothing and says why: duplicates name the existing id, re
               notify("Usage: /atlas guide <书名>", "warning");
               return;
             }
-            const { store } = atlas();
+            const { store, root } = atlas();
             const known = search(store, title, { kinds: ["book"], limit: 3 }).filter((h) => h.score >= 100);
+            // One book, one session: this session now reads this book.
+            const exact = known.find((h) => normalizeLabel(h.title) === normalizeLabel(title));
+            linkBookSession(root, { title, session_id: ctx.sessionManager.getSessionId(), book_id: exact?.id });
+            if (!pi.getSessionName()) pi.setSessionName(`《${title}》`);
             const current = known.flatMap((h) => {
               const book = store.books.get(h.id);
               if (!book) return [];
