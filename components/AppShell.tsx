@@ -94,6 +94,7 @@ type AutoNameStatus =
 const TOP_BAR_ICON_BUTTON_SIZE = "var(--top-bar-height)";
 const AGENT_PANEL_WIDTH = 420;
 const ATLAS_TAB_ID = "atlas:graph";
+const ATLAS_TAB_KEY = "pi-web:atlas-tab";
 // pi's built-in tools that never change a file; any other tool may (#1144).
 const READ_ONLY_TOOL_NAMES = new Set(PRESET_READ_ONLY);
 const TOOL_END_REFRESH_MS = 1000;
@@ -576,6 +577,7 @@ export function AppShell() {
   const [agentTabs, setAgentTabs] = useState<{ sessionId: string; label: string; side?: boolean }[]>([]);
   // The knowledge graph (Pi Book Atlas, fork only): one tab, kept mounted while open.
   const [atlasOpen, setAtlasOpen] = useState(false);
+  const pendingAtlasRestoreRef = useRef<{ open?: boolean; active?: boolean; panelOpen?: boolean } | null>(null);
   const sideTabOwnerRef = useRef<string | null>(null);
   const sideTabsReadyRef = useRef(false);
   const sideTabsSavedOnWorkspaceSwitchRef = useRef(false);
@@ -618,6 +620,7 @@ export function AppShell() {
         setActiveFileTabId(saved.activeId);
         setRightPanelOpen(saved.open);
       }
+      pendingAtlasRestoreRef.current = JSON.parse(window.sessionStorage.getItem(ATLAS_TAB_KEY) ?? "null") as { open?: boolean; active?: boolean; panelOpen?: boolean } | null;
     } catch { /* storage is optional */ }
     setTerminalsRestored(true);
   }, []);
@@ -632,6 +635,29 @@ export function AppShell() {
       }));
     } catch { /* storage is optional */ }
   }, [terminalTabs, activeFileTabId, rightPanelOpen, terminalsRestored]);
+
+  // The knowledge graph tab comes back like a terminal: open, and in front if it
+  // was. Applied once the first workspace is in place, because switching into
+  // it resets the panel to that workspace's file tabs.
+  useEffect(() => {
+    const saved = pendingAtlasRestoreRef.current;
+    if (!terminalsRestored || !activeCwd || !saved) return;
+    pendingAtlasRestoreRef.current = null;
+    if (!saved.open) return;
+    setAtlasOpen(true);
+    if (saved.active) {
+      setActiveFileTabId(ATLAS_TAB_ID);
+      setRightPanelOpen(saved.panelOpen === true);
+    }
+  }, [activeCwd, terminalsRestored]);
+
+  useEffect(() => {
+    if (!terminalsRestored || pendingAtlasRestoreRef.current) return;
+    try {
+      if (!atlasOpen) window.sessionStorage.removeItem(ATLAS_TAB_KEY);
+      else window.sessionStorage.setItem(ATLAS_TAB_KEY, JSON.stringify({ open: true, active: activeFileTabId === ATLAS_TAB_ID, panelOpen: rightPanelOpen }));
+    } catch { /* storage is optional */ }
+  }, [atlasOpen, activeFileTabId, rightPanelOpen, terminalsRestored]);
 
   const rememberSideTabs = useCallback((key: string) => {
     try {
