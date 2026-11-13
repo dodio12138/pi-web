@@ -1,7 +1,7 @@
 import { hostname } from "node:os";
-import { isAbsolute, join, resolve } from "node:path";
+import { resolve } from "node:path";
 import { writeFileSync, readFileSync } from "node:fs";
-import { getAgentDir, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import {
   buildContext,
@@ -21,6 +21,7 @@ import {
   type Operation,
   type PatchRequest,
 } from "../core/index";
+import { resolveAtlasRoot, type AtlasSettings } from "../root";
 
 // Pi Book Atlas as a pi extension (P2): the model gets atlas_* tools over the
 // shared knowledge library, /atlas manages it, and a learning session's
@@ -35,19 +36,9 @@ const ORGANIZE_HEADER = "整理本次讨论进知识库（Pi Book Atlas）。";
 const GUIDE_HEADER = "用读书透镜带我过一遍这本书（Pi Book Atlas）：";
 const SECTION = "pi-book-atlas";
 
-interface Settings {
-  root?: string;
-  autoEnable?: boolean;
-}
+type Settings = AtlasSettings;
 
-/** Where the library lives: PI_BOOK_ATLAS_DIR, else settings bookAtlas.root, else <agent dir>/atlas. */
-export function resolveAtlasRoot(settings: Settings, env: NodeJS.ProcessEnv = process.env): string {
-  const agentDir = getAgentDir();
-  const configured = env.PI_BOOK_ATLAS_DIR || settings.root;
-  if (!configured) return join(agentDir, "atlas");
-  if (configured === "~" || configured.startsWith("~/")) return join(process.env.HOME ?? "", configured.slice(1));
-  return isAbsolute(configured) ? configured : resolve(agentDir, configured);
-}
+export { resolveAtlasRoot };
 
 /** What a person could read of a message: user text, the assistant's text parts. Never thinking or tool calls. */
 export function visibleText(message: { role?: string; content?: unknown }): string {

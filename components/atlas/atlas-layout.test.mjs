@@ -1,0 +1,43 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { createJiti } from "jiti";
+
+const jiti = createJiti(import.meta.url, { interopDefault: true });
+const { placeCards, CARD_W, CARD_H } = await jiti.import("./atlas-layout.ts");
+
+test("placed cards never move; only new ones get positions, deterministically", () => {
+  const cards = [{ id: "book-a", kind: "book" }, { id: "node-1", kind: "node" }, { id: "node-2", kind: "node" }];
+  const edges = [{ from: "book-a", to: "node-1" }, { from: "book-a", to: "node-2" }];
+  const fixed = { "book-a": { x: 100, y: 50 } };
+  const placed = placeCards(cards, edges, fixed);
+  assert.deepEqual(Object.keys(placed).sort(), ["node-1", "node-2"]);
+  assert.deepEqual(placeCards(cards, edges, fixed), placed, "same input, same layout");
+  assert.deepEqual(placeCards(cards, edges, { ...fixed, ...placed }), {}, "nothing new, nothing placed");
+});
+
+test("new cards settle near what they relate to, without sitting on each other", () => {
+  const cards = [{ id: "book-a", kind: "book" }, ...Array.from({ length: 12 }, (_, i) => ({ id: `node-${i}`, kind: "node" }))];
+  const edges = cards.slice(1).map((c) => ({ from: "book-a", to: c.id }));
+  const placed = placeCards(cards, edges, {});
+  const all = Object.entries(placed);
+  assert.equal(all.length, 13);
+  for (const [a, pa] of all) {
+    for (const [b, pb] of all) {
+      if (a >= b) continue;
+      const overlap = Math.abs(pa.x - pb.x) < CARD_W * 0.9 && Math.abs(pa.y - pb.y) < CARD_H * 0.9;
+      assert.ok(!overlap, `${a} overlaps ${b}`);
+    }
+    if (a !== "book-a") assert.ok(Math.hypot(pa.x - placed["book-a"].x, pa.y - placed["book-a"].y) < 900, `${a} stays near its book`);
+  }
+});
+
+test("asking about cards carries their ids and content into the chat", async () => {
+  const { askText } = await jiti.import("./atlas-client.ts");
+  const one = askText("质疑", [{ id: "node-abc", type: "concept", title: "自然状态", summary: "没有共同权力时的处境" }]);
+  assert.match(one, /^\[知识图谱 · 质疑\]/);
+  assert.match(one, /自然状态（概念，node-abc）：没有共同权力时的处境/);
+  assert.match(one, /请对这个知识点提出最有力的质疑和反例。/);
+  const two = askText("比较", [{ id: "node-a", type: "concept", title: "A", summary: "" }, { id: "node-b", type: "claim", title: "B", summary: "" }]);
+  assert.match(two, /请比较这些知识点的异同。/);
+  assert.match(two, /node-a[\s\S]*node-b/);
+});

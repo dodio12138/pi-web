@@ -20,6 +20,7 @@ import { AgentSessionPanel } from "./AgentSessionPanel";
 import { DebugPanel, DebugPanelBoundary } from "./DebugPanel";
 import { SessionChatPanel } from "./SessionChatPanel";
 import { TerminalPanel } from "./TerminalPanel";
+import { AtlasPanel } from "./atlas/AtlasPanel";
 import { newTerminalTab, restoreTerminalTabs, TERMINAL_TABS_KEY, type TerminalTab } from "./terminal-tab-state";
 import { appendSideTab, restoreSideTabs, sideTabsKey } from "./side-tab-state";
 import { useTheme } from "@/hooks/useTheme";
@@ -92,6 +93,7 @@ type AutoNameStatus =
 // app/globals.css: 36px, 44px on a phone or touch screen.
 const TOP_BAR_ICON_BUTTON_SIZE = "var(--top-bar-height)";
 const AGENT_PANEL_WIDTH = 420;
+const ATLAS_TAB_ID = "atlas:graph";
 // pi's built-in tools that never change a file; any other tool may (#1144).
 const READ_ONLY_TOOL_NAMES = new Set(PRESET_READ_ONLY);
 const TOOL_END_REFRESH_MS = 1000;
@@ -572,6 +574,8 @@ export function AppShell() {
   const [terminalsRestored, setTerminalsRestored] = useState(false);
   // Subagent tabs remain open within a project; side tabs follow their main session.
   const [agentTabs, setAgentTabs] = useState<{ sessionId: string; label: string; side?: boolean }[]>([]);
+  // The knowledge graph (Pi Book Atlas, fork only): one tab, kept mounted while open.
+  const [atlasOpen, setAtlasOpen] = useState(false);
   const sideTabOwnerRef = useRef<string | null>(null);
   const sideTabsReadyRef = useRef(false);
   const sideTabsSavedOnWorkspaceSwitchRef = useRef(false);
@@ -597,6 +601,7 @@ export function AppShell() {
         kind: (tab.side ? "side" : "agent") as "agent" | "side",
       };
     }),
+    ...(atlasOpen ? [{ id: ATLAS_TAB_ID, label: translate("atlas.tab"), filePath: translate("atlas.tab"), kind: "atlas" as const }] : []),
   ], panelTabOrder);
   // A closed tab leaves the saved order, so reopening it appends it like any new tab.
   const panelTabIds = panelTabs.map((tab) => tab.id).join("\n");
@@ -1386,11 +1391,17 @@ export function AppShell() {
     const replacement = tab.closing === "restart" ? newTerminalTab(tab.cwd) : null;
     const remaining = terminalTabs.filter((item) => item.id !== tab.id);
     setTerminalTabs((tabs) => tabs.flatMap((item) => item.id !== tab.id ? [item] : replacement ? [replacement] : []));
-    setActiveFileTabId((current) => current !== tab.id ? current : replacement?.id ?? remaining.at(-1)?.id ?? fileTabs.at(-1)?.id ?? lastAgentTabId(agentTabs));
-    if (!replacement && !remaining.length && !fileTabs.length && !agentTabs.length) setRightPanelOpen(false);
+    setActiveFileTabId((current) => current !== tab.id ? current : replacement?.id ?? remaining.at(-1)?.id ?? fileTabs.at(-1)?.id ?? lastAgentTabId(agentTabs) ?? (atlasOpen ? ATLAS_TAB_ID : null));
+    if (!replacement && !remaining.length && !fileTabs.length && !agentTabs.length && !atlasOpen) setRightPanelOpen(false);
   };
 
   const handleCloseFileTab = useCallback((tabId: string) => {
+    if (tabId === ATLAS_TAB_ID) {
+      setAtlasOpen(false);
+      setActiveFileTabId((cur) => (cur !== tabId ? cur : fileTabs.at(-1)?.id ?? terminalTabs.at(-1)?.id ?? lastAgentTabId(agentTabs)));
+      if (fileTabs.length === 0 && terminalTabs.length === 0 && agentTabs.length === 0) setRightPanelOpen(false);
+      return;
+    }
     if (terminalTabs.some((tab) => tab.id === tabId)) {
       setTerminalTabs((tabs) => tabs.map((tab) => tab.id === tabId && !tab.closing ? { ...tab, closing: "close" } : tab));
       return;
@@ -1400,22 +1411,40 @@ export function AppShell() {
       setAgentTabs(remainingAgents);
       setActiveFileTabId((cur) => {
         if (cur !== tabId) return cur;
-        return fileTabs.at(-1)?.id ?? terminalTabs.at(-1)?.id ?? lastAgentTabId(remainingAgents);
+        return fileTabs.at(-1)?.id ?? terminalTabs.at(-1)?.id ?? lastAgentTabId(remainingAgents) ?? (atlasOpen ? ATLAS_TAB_ID : null);
       });
-      if (fileTabs.length === 0 && terminalTabs.length === 0 && remainingAgents.length === 0) setRightPanelOpen(false);
+      if (fileTabs.length === 0 && terminalTabs.length === 0 && remainingAgents.length === 0 && !atlasOpen) setRightPanelOpen(false);
       return;
     }
     setFileTabs((prev) => {
       const next = prev.filter((t) => t.id !== tabId);
-      if (next.length === 0 && terminalTabs.length === 0 && agentTabs.length === 0) setRightPanelOpen(false);
+      if (next.length === 0 && terminalTabs.length === 0 && agentTabs.length === 0 && !atlasOpen) setRightPanelOpen(false);
       return next;
     });
     setActiveFileTabId((cur) => {
       if (cur !== tabId) return cur;
       const remaining = fileTabs.filter((t) => t.id !== tabId);
-      return remaining.at(-1)?.id ?? terminalTabs.at(-1)?.id ?? lastAgentTabId(agentTabs);
+      return remaining.at(-1)?.id ?? terminalTabs.at(-1)?.id ?? lastAgentTabId(agentTabs) ?? (atlasOpen ? ATLAS_TAB_ID : null);
     });
-  }, [fileTabs, terminalTabs, agentTabs]);
+  }, [fileTabs, terminalTabs, agentTabs, atlasOpen]);
+
+  const handleOpenAtlas = useCallback(() => {
+    if (atlasOpen && rightPanelOpen && activeFileTabId === ATLAS_TAB_ID) {
+      handleCloseFileTab(ATLAS_TAB_ID);
+      return;
+    }
+    setAtlasOpen(true);
+    setActiveFileTabId(ATLAS_TAB_ID);
+    setRightPanelOpen(true);
+    if (isMobile) setSidebarOpen(false);
+  }, [activeFileTabId, atlasOpen, handleCloseFileTab, isMobile, rightPanelOpen]);
+
+  // A full-width panel hides the chat: step back so the inserted question is in view.
+  const handleAtlasInsert = useCallback((text: string) => {
+    setRightPanelExpanded(false);
+    if (isMobile) setRightPanelOpen(false);
+    window.requestAnimationFrame(() => chatInputRef.current?.insertText(text));
+  }, [isMobile]);
 
   // The Agents switcher's Delete on a side chat: its tab goes with it, and the
   // main chat showing it goes back to the parent, as the Main agent row does
@@ -2049,6 +2078,31 @@ export function AppShell() {
             <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-7.9 7.9l-6.9 6.9a2.1 2.1 0 0 1-3-3l6.9-6.9a6 6 0 0 1 7.9-7.9z" />
           </svg>
           {!mobile && <span>{translate("tools.label")}</span>}
+        </button>
+        <button
+          type="button"
+          onClick={handleOpenAtlas}
+          title={translate("atlas.title")}
+          aria-label={translate("atlas.title")}
+          aria-pressed={atlasOpen && rightPanelOpen && activeFileTabId === ATLAS_TAB_ID}
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+            width: mobile ? TOP_BAR_ICON_BUTTON_SIZE : undefined,
+            height: "100%", padding: mobile ? 0 : "0 12px",
+            background: "none", border: "none",
+            borderTop: atlasOpen && rightPanelOpen && activeFileTabId === ATLAS_TAB_ID ? "2px solid var(--accent)" : "2px solid transparent",
+            borderRight: "1px solid var(--border)",
+            cursor: "pointer", color: "var(--text-muted)",
+            fontSize: 11, whiteSpace: "nowrap", transition: "color 0.1s, background 0.1s",
+          }}
+          onMouseEnter={(event) => { event.currentTarget.style.color = "var(--text)"; }}
+          onMouseLeave={(event) => { event.currentTarget.style.color = "var(--text-muted)"; }}
+          data-mobile-toolbar-action={mobile ? "atlas" : undefined}
+        >
+          <svg width={mobile ? 16 : 12} height={mobile ? 16 : 12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: atlasOpen ? "var(--accent)" : "var(--text-dim)", flexShrink: 0 }} aria-hidden="true">
+            <circle cx="6" cy="6" r="2.5" /><circle cx="18" cy="8" r="2.5" /><circle cx="10" cy="18" r="2.5" /><path d="M8.3 7l7.4.6M7 8.3l2.2 7.4M16.4 10l-4.6 6" />
+          </svg>
+          {!mobile && <span>{translate("atlas.label")}</span>}
         </button>
       </div>
     );
@@ -3013,11 +3067,24 @@ export function AppShell() {
                 { sourceSessionId: activeFileTab.sourceSessionId, page },
               )}
             />
-          ) : !terminalTabs.some((tab) => tab.id === activeFileTabId) && !activeAgentTab ? (
+          ) : !terminalTabs.some((tab) => tab.id === activeFileTabId) && !activeAgentTab && activeFileTabId !== ATLAS_TAB_ID ? (
             <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 12 }}>
                {translate("files.noneOpen")}
             </div>
           ) : null}
+          {atlasOpen && (
+            <div hidden={activeFileTabId !== ATLAS_TAB_ID} style={{ width: "100%", height: "100%" }}>
+              <AtlasPanel
+                active={rightPanelOpen && activeFileTabId === ATLAS_TAB_ID}
+                sessionId={selectedSession?.id ?? null}
+                onInsert={handleAtlasInsert}
+                onOpenSession={(sessionId) => {
+                  const session = sessionCatalog.find((item) => item.id === sessionId);
+                  if (session) handleSelectSession(session);
+                }}
+              />
+            </div>
+          )}
           {terminalTabs.map((tab) => (
             <div key={tab.id} hidden={tab.id !== activeFileTabId} style={{ width: "100%", height: "100%" }}>
               <TerminalPanel

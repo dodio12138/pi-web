@@ -11,7 +11,8 @@
   "main": "src/core/index.ts",
   "exports": {
     "./core": "./src/core/index.ts",
-    "./extension": "./src/extension/index.ts"
+    "./extension": "./src/extension/index.ts",
+    "./root": "./src/root.ts"
   },
   "pi": {
     "extensions": [

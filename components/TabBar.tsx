@@ -9,7 +9,7 @@ export interface Tab {
   id: string;
   label: string;
   filePath: string;
-  kind?: "terminal" | "agent" | "side";
+  kind?: "terminal" | "agent" | "side" | "atlas";
   closing?: boolean;
   sourceSessionId?: string | null;
   initialDisplayMode?: FileViewerDisplayMode;
@@ -171,6 +171,10 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onReorderTa
               ) : tab.kind === "side" ? (
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M21 12a8 8 0 0 1-8 8H5.5a2 2 0 0 1-1.4-3.4A8 8 0 1 1 21 12z" />
+                </svg>
+              ) : tab.kind === "atlas" ? (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="6" cy="6" r="2.5" /><circle cx="18" cy="8" r="2.5" /><circle cx="10" cy="18" r="2.5" /><path d="M8.3 7l7.4.6M7 8.3l2.2 7.4M16.4 10l-4.6 6" />
                 </svg>
               ) : getFileIcon(tab.label, 13)}
             </span>
